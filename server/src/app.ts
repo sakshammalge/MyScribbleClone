@@ -53,12 +53,32 @@ export function createInklingServer(): InklingServer {
     });
     socket.on('room:join', (req, ack) => {
       const result = rooms.join(socket.id, req?.code, req?.profile, req?.token);
-      if (result.ok) enter(result.room.code);
+      if (result.ok) {
+        enter(result.room.code);
+        // Rejoining mid-drawing (refresh, reconnect): hand over the picture so far.
+        if (result.room.phase === 'drawing')
+          socket.emit('canvas:replay', rooms.canvasOps(socket.id));
+      }
       if (typeof ack === 'function') ack(result);
     });
     socket.on('room:settings', (patch, ack) => {
       const result = rooms.updateSettings(socket.id, patch);
       if (typeof ack === 'function') ack(result);
+    });
+    socket.on('room:start', (ack) => {
+      const result = rooms.start(socket.id);
+      if (typeof ack === 'function') ack(result);
+    });
+    socket.on('room:lobby', (ack) => {
+      const result = rooms.backToLobby(socket.id);
+      if (typeof ack === 'function') ack(result);
+    });
+    socket.on('canvas:event', (raw) => {
+      const relay = rooms.canvasEvent(socket.id, raw);
+      if (relay) socket.to(relay.code).emit('canvas:event', relay.event);
+    });
+    socket.on('canvas:sync', (ack) => {
+      if (typeof ack === 'function') ack(rooms.canvasOps(socket.id));
     });
     socket.on('room:leave', () => {
       // Leave the socket room first so the leaver is not sent the update about their own exit.

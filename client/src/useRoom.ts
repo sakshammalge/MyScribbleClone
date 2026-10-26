@@ -10,6 +10,8 @@ export const ERROR_TEXT: Record<RoomError, string> = {
   'room-full': 'That room is full.',
   'not-in-room': 'You are not in a room.',
   'not-host': 'Only the host can do that.',
+  'need-players': 'You need at least two players to start.',
+  'wrong-phase': 'The game is already underway.',
 };
 
 /** Room membership: create, join, leave, host settings, and seat recovery after a dropped connection. */
@@ -92,7 +94,31 @@ export function useRoom(profile: Profile) {
     });
   }, []);
 
+  const startGame = useCallback(() => {
+    socket.emit('room:start', (res) => {
+      if (!res.ok) setError(res.error);
+    });
+  }, []);
+
+  const backToLobby = useCallback(() => {
+    socket.emit('room:lobby', (res) => {
+      if (!res.ok) setError(res.error);
+    });
+  }, []);
+
   const clearError = useCallback(() => setError(null), []);
 
-  return { room, myId, error, busy, create, join, leave, updateSettings, clearError };
+  return {
+    room,
+    myId,
+    error,
+    busy,
+    create,
+    join,
+    leave,
+    updateSettings,
+    startGame,
+    backToLobby,
+    clearError,
+  };
 }

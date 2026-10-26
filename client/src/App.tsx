@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Game } from './Game';
 import { Home } from './Home';
 import { Lobby } from './Lobby';
 import { codeFromPath, invitePath, usePath } from './route';
@@ -10,8 +11,19 @@ export function App() {
   const { state } = useConnection();
   const { path, go } = usePath();
   const [profile, setProfile] = useState(loadProfile);
-  const { room, myId, error, busy, create, join, leave, updateSettings, clearError } =
-    useRoom(profile);
+  const {
+    room,
+    myId,
+    error,
+    busy,
+    create,
+    join,
+    leave,
+    updateSettings,
+    startGame,
+    backToLobby,
+    clearError,
+  } = useRoom(profile);
   const inviteCode = codeFromPath(path);
   const roomCode = room?.code;
 
@@ -25,16 +37,23 @@ export function App() {
     go('/');
   };
 
+  const leaveRoom = () => {
+    leave();
+    goHome();
+  };
+
+  if (room && myId && room.phase === 'drawing') {
+    return <Game room={room} myId={myId} onLeave={leaveRoom} onLobby={backToLobby} />;
+  }
+
   if (room && myId) {
     return (
       <Lobby
         room={room}
         myId={myId}
-        onLeave={() => {
-          leave();
-          goHome();
-        }}
+        onLeave={leaveRoom}
         onSettings={updateSettings}
+        onStart={startGame}
       />
     );
   }

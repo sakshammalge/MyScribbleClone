@@ -1,3 +1,6 @@
+export * from './canvas.ts';
+import type { CanvasEvent, DrawOp } from './canvas.ts';
+
 export const APP_NAME = 'Inkling';
 export const DEFAULT_PORT = 3001;
 
@@ -34,7 +37,9 @@ export interface PlayerInfo {
 
 export interface RoomState {
   code: string;
-  phase: 'lobby';
+  phase: 'lobby' | 'drawing';
+  /** Who holds the pen while the phase is 'drawing'; the game loop will rotate this. */
+  drawerId: string | null;
   players: PlayerInfo[];
   settings: RoomSettings;
 }
@@ -45,11 +50,19 @@ export interface Profile {
 }
 
 export type RoomError =
-  'invalid-name' | 'name-taken' | 'room-not-found' | 'room-full' | 'not-in-room' | 'not-host';
+  | 'invalid-name'
+  | 'name-taken'
+  | 'room-not-found'
+  | 'room-full'
+  | 'not-in-room'
+  | 'not-host'
+  | 'need-players'
+  | 'wrong-phase';
 
 export type JoinResult =
   { ok: true; playerId: string; token: string; room: RoomState } | { ok: false; error: RoomError };
 
+export type ActionResult = { ok: true } | { ok: false; error: RoomError };
 export type SettingsResult = { ok: true } | { ok: false; error: RoomError };
 
 export function normalizeCode(raw: string): string {
@@ -84,6 +97,10 @@ export interface ServerToClientEvents {
   hello: (payload: HelloPayload) => void;
   /** Full room snapshot, sent to everyone in the room after any change. */
   'room:state': (room: RoomState) => void;
+  /** One drawing change from the drawer, relayed to everyone else in the room. */
+  'canvas:event': (event: CanvasEvent) => void;
+  /** The whole drawing so far; replaces whatever the viewer had (join, refresh, reconnect). */
+  'canvas:replay': (ops: DrawOp[]) => void;
 }
 
 /** Events clients emit to the server. Acks carry the result. */
@@ -97,4 +114,12 @@ export interface ClientToServerEvents {
   ) => void;
   'room:settings': (patch: Partial<RoomSettings>, ack: (result: SettingsResult) => void) => void;
   'room:leave': () => void;
+  /** Host only: leave the lobby for the drawing board (needs two players). */
+  'room:start': (ack: (result: ActionResult) => void) => void;
+  /** Host only: back to the lobby with a clean board. */
+  'room:lobby': (ack: (result: ActionResult) => void) => void;
+  /** Drawer only. Strokes arrive in chunks; undo and clear apply to the whole drawing. */
+  'canvas:event': (event: CanvasEvent) => void;
+  /** Ask for the current drawing, e.g. right after mounting the board. */
+  'canvas:sync': (ack: (ops: DrawOp[]) => void) => void;
 }

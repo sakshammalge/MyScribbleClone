@@ -1,4 +1,5 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
+import { Board } from './canvas';
 import {
   AVATAR_COLORS,
   AVATAR_FACES,
@@ -8,6 +9,9 @@ import {
   cleanName,
   defaultSettings,
   normalizeCode,
+  parseCanvasEvent,
+  type CanvasEvent,
+  type DrawOp,
   type Profile,
   type RoomError,
   type RoomSettings,
@@ -31,6 +35,9 @@ interface Room {
   hostId: string;
   settings: RoomSettings;
   seats: Seat[];
+  phase: RoomState['phase'];
+  drawerId: string | null;
+  board: Board;
 }
 
 export type Joined = { ok: true; room: RoomState; playerId: string; token: string };
@@ -67,6 +74,9 @@ export class RoomManager {
       hostId: '',
       settings: defaultSettings(),
       seats: [],
+      phase: 'lobby',
+      drawerId: null,
+      board: new Board(),
     };
     this.rooms.set(room.code, room);
     const seat = this.seat(room, socketId, name, profile.avatar);
@@ -121,6 +131,53 @@ export class RoomManager {
     return { ok: true };
   }
 
+  /** Host starts the drawing board; the host holds the pen until the game loop rotates it. */
+  start(socketId: string): { ok: true } | Failed {
+    const found = this.hostRoom(socketId);
+    if (!found.ok) return found;
+    const { room, playerId } = found;
+    if (room.phase !== 'lobby') return { ok: false, error: 'wrong-phase' };
+    if (room.seats.length < 2) return { ok: false, error: 'need-players' };
+    room.phase = 'drawing';
+    room.drawerId = playerId;
+    room.board.clear();
+    this.changed(room);
+    return { ok: true };
+  }
+
+  backToLobby(socketId: string): { ok: true } | Failed {
+    const found = this.hostRoom(socketId);
+    if (!found.ok) return found;
+    const { room } = found;
+    room.phase = 'lobby';
+    room.drawerId = null;
+    room.board.clear();
+    this.changed(room);
+    return { ok: true };
+  }
+
+  /**
+   * Validates and records a drawing change from a socket. Returns the code and the event to
+   * relay to the others, or null when it must be ignored (not the drawer, malformed, no-op).
+   */
+  canvasEvent(socketId: string, raw: unknown): { code: string; event: CanvasEvent } | null {
+    const where = this.bySocket.get(socketId);
+    const room = where && this.rooms.get(where.code);
+    if (!where || !room || room.phase !== 'drawing' || room.drawerId !== where.playerId) {
+      return null;
+    }
+    const parsed = parseCanvasEvent(raw);
+    const event = parsed && room.board.apply(parsed);
+    return event ? { code: room.code, event } : null;
+  }
+
+  /** The drawing to show a viewer, or an empty one outside the drawing phase. */
+  canvasOps(socketId: string): DrawOp[] {
+    const where = this.bySocket.get(socketId);
+    const room = where && this.rooms.get(where.code);
+    return room?.phase === 'drawing' ? room.board.snapshot() : [];
+  }
+
   /** Voluntary exit: the seat is freed immediately. */
   leave(socketId: string): void {
     const where = this.bySocket.get(socketId);
@@ -150,6 +207,14 @@ export class RoomManager {
     return this.rooms.has(normalizeCode(code));
   }
 
+  private hostRoom(socketId: string): { ok: true; room: Room; playerId: string } | Failed {
+    const where = this.bySocket.get(socketId);
+    const room = where && this.rooms.get(where.code);
+    if (!where || !room) return { ok: false, error: 'not-in-room' };
+    if (room.hostId !== where.playerId) return { ok: false, error: 'not-host' };
+    return { ok: true, room, playerId: where.playerId };
+  }
+
   private removeSeat(code: string, playerId: string): void {
     const room = this.rooms.get(code);
     if (!room) return;
@@ -165,6 +230,8 @@ export class RoomManager {
       // Prefer a connected player as the new host.
       room.hostId = (room.seats.find((s) => s.socketId) ?? room.seats[0]!).id;
     }
+    // The pen never stays with someone who left.
+    if (room.drawerId === playerId) room.drawerId = room.hostId;
     this.changed(room);
   }
 
@@ -195,7 +262,8 @@ export class RoomManager {
   private snapshot(room: Room): RoomState {
     return {
       code: room.code,
-      phase: 'lobby',
+      phase: room.phase,
+      drawerId: room.drawerId,
       settings: { ...room.settings },
       players: room.seats.map((s) => ({
         id: s.id,
