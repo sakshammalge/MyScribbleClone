@@ -202,3 +202,18 @@ export interface ClientToServerEvents {
   /** Ask for the current drawing, e.g. right after mounting the board. */
   'canvas:sync': (ack: (ops: DrawOp[]) => void) => void;
 }
+
+export interface Ranked<T extends { score: number }> {
+  player: T;
+  /** 1-based standing; players on equal scores share one (1, 1, 3). */
+  place: number;
+}
+
+/** Highest score first, ties sharing a place and keeping seating order among themselves. */
+export function rankPlayers<T extends { score: number }>(players: readonly T[]): Ranked<T>[] {
+  const sorted = [...players].sort((a, b) => b.score - a.score);
+  return sorted.map((player) => {
+    const before = sorted.findIndex((p) => p.score === player.score);
+    return { player, place: before + 1 };
+  });
+}

@@ -193,6 +193,37 @@ describe('game loop', () => {
     expect(state.players.map((p) => p.score)).toEqual([0, 0]);
   });
 
+  it('lets the host rematch straight from the final standings, but not mid-game', () => {
+    lobby('Ada', 'Bo');
+    rooms.start('s-Ada');
+    expect(rooms.start('s-Ada')).toEqual({ ok: false, error: 'wrong-phase' });
+    for (let turn = 0; turn < 4; turn++) {
+      const drawer = state.players.find((p) => p.id === state.drawerId)!.name;
+      rooms.chat(drawer === 'Ada' ? 's-Bo' : 's-Ada', pick(drawer));
+      vi.advanceTimersByTime(TURN_TIMING.revealSec * 1000);
+    }
+    expect(state.phase).toBe('ended');
+    expect(rooms.start('s-Bo')).toEqual({ ok: false, error: 'not-host' });
+    expect(rooms.start('s-Ada')).toEqual({ ok: true });
+    expect(state.phase).toBe('choosing');
+    expect(state.round).toBe(1);
+    expect(state.players.map((p) => p.score)).toEqual([0, 0]);
+  });
+
+  it('announces a shared win when the top scores tie', () => {
+    lobby('Ada', 'Bo');
+    rooms.updateSettings('s-Ada', { rounds: 2 });
+    rooms.start('s-Ada');
+    // Nobody ever guesses: every turn ends 0-0, so both share first place.
+    for (let turn = 0; turn < 4; turn++) {
+      pick(state.players.find((p) => p.id === state.drawerId)!.name);
+      vi.advanceTimersByTime(DRAW_MS);
+      vi.advanceTimersByTime(TURN_TIMING.revealSec * 1000);
+    }
+    expect(state.phase).toBe('ended');
+    expect(heard['s-Ada']!.at(-1)!.text).toBe('Game over! Ada and Bo tie with 0.');
+  });
+
   it('does not repeat a word within one game', () => {
     lobby('Ada', 'Bo');
     rooms.updateSettings('s-Ada', { rounds: 3 });

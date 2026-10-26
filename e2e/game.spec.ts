@@ -177,6 +177,8 @@ test('time running out reveals the word, and hints uncover real letters', async 
 
   await expect(bo.page.getByTestId('reveal')).toContainText(word, { timeout: 30_000 });
   await expect(bo.page.getByTestId('reveal')).toContainText('+0');
+  await expect(bo.page.getByTestId('reveal')).toContainText('Nobody found it this time.');
+  await expect(bo.page.getByTestId('gain-Bo')).toHaveCount(0);
   await expect(choices(bo)).toHaveCount(3);
   await closeAll(players);
 });
@@ -205,14 +207,20 @@ test('plays every round to the final standings, then the host can play again', a
     await expect(p.page.getByTestId('standings')).toContainText('Game over');
     await expect(p.page.getByTestId('round')).toHaveText('Round 2 of 2');
   }
-  const first = ada.page.getByTestId('standings').getByRole('listitem').first();
-  await expect(first).toContainText(/\d+/);
+  // Both guessed the same speed-ish; whoever leads sits on the winner's block.
+  const podium = ada.page.getByRole('list', { name: 'Final standings' });
+  await expect(podium.getByRole('listitem')).toHaveCount(2);
+  await expect(ada.page.getByTestId('podium-Ada')).toContainText(/\d+/);
   await expect(log(bo)).toContainText('Game over!');
   await expect(bo.page.getByRole('button', { name: 'Play again' })).toHaveCount(0);
 
+  // Play again goes straight into a fresh game with zeroed scores.
   await ada.page.getByRole('button', { name: 'Play again' }).click();
   for (const p of players) {
-    await expect(p.page.getByRole('button', { name: 'Start game' })).toBeVisible();
+    await expect(p.page.getByTestId('round')).toHaveText('Round 1 of 2');
+    await expect(p.page.getByTestId('standings')).toHaveCount(0);
+    await expect(score(p, 'Ada')).toHaveText('0');
+    await expect(score(p, 'Bo')).toHaveText('0');
   }
   await closeAll(players);
 });
@@ -320,4 +328,77 @@ test('the game screen fits a phone for the picker and the guessers', async ({ br
   await expect(bo.page.getByTestId('chat-log')).toContainText('a guess on a small screen');
   expect(await overflow()).toBe(false);
   await closeAll([host, bo]);
+});
+
+test('turn results rank the points, and the podium puts the leader in the middle', async ({
+  browser,
+}) => {
+  test.setTimeout(90_000);
+  const { players, host } = await lobby(browser, 'Ada', 'Bo', 'Cy');
+  const [ada, bo, cy] = players as [Player, Player, Player];
+  await host.page.getByRole('slider', { name: 'Rounds' }).fill('2');
+  await host.page.getByRole('button', { name: 'Start game' }).click();
+
+  for (let turn = 0; turn < 6; turn++) {
+    const drawer = players[turn % 3]!;
+    const [first, second] = players.filter((p) => p !== drawer) as [Player, Player];
+    const word = await pick(drawer);
+    await guess(first, word);
+    // Make the second guesser clearly slower so the order is unambiguous.
+    await second.page.waitForTimeout(400);
+    await guess(second, word);
+
+    for (const p of players) {
+      const reveal = p.page.getByTestId('reveal');
+      await expect(reveal).toContainText(word);
+      // Results are listed biggest gain first, and the drawer is marked.
+      const gains = (await reveal.locator('.gains b').allInnerTexts()).map((t) =>
+        Number(t.replace('+', '')),
+      );
+      expect(gains).toEqual([...gains].sort((a, b) => b - a));
+      await expect(reveal.locator('.gains li').filter({ hasText: 'drew it' })).toContainText(
+        drawer.name,
+      );
+      await expect(reveal).not.toContainText('Nobody found it');
+    }
+    // Each earner gets a "+N" chip on the scoreboard that matches the results.
+    const firstGain = Number(
+      (await first.page.getByTestId(`gain-${first.name}`).innerText()).slice(1),
+    );
+    const secondGain = Number(
+      (await first.page.getByTestId(`gain-${second.name}`).innerText()).slice(1),
+    );
+    expect(firstGain).toBeGreaterThanOrEqual(secondGain);
+    expect(firstGain).toBeGreaterThan(100);
+  }
+
+  const readScores = async (p: Player) =>
+    Object.fromEntries(
+      await Promise.all(
+        ['Ada', 'Bo', 'Cy'].map(
+          async (n) => [n, Number(await score(p, n).innerText())] as [string, number],
+        ),
+      ),
+    );
+
+  for (const p of players) {
+    await expect(p.page.getByTestId('standings')).toBeVisible();
+    const scores = await readScores(p);
+    const sorted = Object.entries(scores).sort((a, b) => b[1] - a[1]);
+    const podium = p.page.getByRole('list', { name: 'Final standings' }).getByRole('listitem');
+    await expect(podium).toHaveCount(3);
+    // Winner is on the middle block; every block carries its place.
+    await expect(podium.nth(1)).toContainText(sorted[0]![0]);
+    await expect(podium.nth(1)).toContainText(String(sorted[0]![1]));
+    await expect(podium.nth(1)).toHaveAttribute('data-place', '1');
+    await expect(p.page.getByTestId(`podium-${sorted[2]![0]}`)).toHaveAttribute(
+      'data-place',
+      String(sorted[2]![1] === sorted[1]![1] ? 2 : 3),
+    );
+    await expect(log(p)).toContainText('Game over!');
+    await expect(p.page.getByRole('button', { name: 'Play again' })).toHaveCount(p === ada ? 1 : 0);
+  }
+  void bo;
+  void cy;
+  await closeAll(players);
 });

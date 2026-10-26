@@ -34,6 +34,10 @@ The host presses Start game (two or more players) to open the drawing studio. Fo
 
 Strokes travel as 0 to 1 fractions of a fixed 960x720 sheet, batched about every 30 ms. The server keeps the ordered operations per room, so a refresh, reconnect or late join replays the whole picture. Only the drawer's events are accepted, and every event is validated and size-capped. The protocol lives in `shared/src/canvas.ts`.
 
+## Scoring and results
+
+A correct guess is worth 100 plus up to 300 for the time left, plus 100/60/30 for the first three guessers; the drawer earns the average guesser's score, scaled by how many found it (`server/src/game.ts`). After each turn the reveal lists the points biggest first and the scoreboard shows a `+N` chip. At the end the top three stand on a podium (equal scores share a place and announce a tie), and the host can hit Play again for an immediate rematch with the same players, or go back to the lobby.
+
 ## Checks
 
 `npm run lint`, `npm run typecheck`, `npm test`, `npm run format:check`, and `npm run test:e2e` (Playwright, multi-browser room flows). All run in CI.
