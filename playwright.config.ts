@@ -11,7 +11,7 @@ export default defineConfig({
   },
   webServer: {
     command: 'npm run build && npm start',
-    env: { PORT: String(port) },
+    env: { PORT: String(port), INKLING_TIME_SCALE: '0.1' },
     url: `http://localhost:${port}/healthz`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

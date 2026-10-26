@@ -37,3 +37,10 @@ Strokes travel as 0 to 1 fractions of a fixed 960x720 sheet, batched about every
 ## Checks
 
 `npm run lint`, `npm run typecheck`, `npm test`, `npm run format:check`, and `npm run test:e2e` (Playwright, multi-browser room flows). All run in CI.
+
+## Word list
+
+The built-in words (`server/src/wordlist.ts`, about 3,400 of them) are common concrete nouns taken from
+WordNet and filtered by SCOWL frequency, merged with the MIT-licensed `word-pictionary-list` package and a
+hand-picked set of actions and party staples, minus a blocklist of words you would not want on a shared
+screen. Hosts can add their own words (or use only theirs) from the lobby.

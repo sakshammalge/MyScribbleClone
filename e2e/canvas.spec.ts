@@ -22,6 +22,12 @@ async function joinRoom(page: Page, code: string, name: string) {
   await expect(page.getByRole('listitem').filter({ hasText: name })).toBeVisible();
 }
 
+/** The drawer takes the first word on offer, which starts the clock. */
+async function pickWord(page: Page) {
+  await page.getByRole('group', { name: 'Choose a word' }).getByRole('button').first().click();
+  await expect(page.getByRole('toolbar', { name: 'Drawing tools' })).toBeVisible();
+}
+
 /** A host and a friend, both on the drawing board. */
 async function startedRoom(browser: Browser) {
   const host = await newPlayer(browser);
@@ -32,6 +38,7 @@ async function startedRoom(browser: Browser) {
   for (const { page } of [host, guest]) {
     await expect(page.getByTestId('drawing-canvas')).toBeVisible();
   }
+  await pickWord(host.page);
   return { host, guest, code };
 }
 
@@ -80,7 +87,7 @@ test('start needs two players and only the host can press it', async ({ browser 
 
   await start.click();
   await expect(canvas(guest.page)).toBeVisible();
-  await expect(host.page.getByRole('toolbar', { name: 'Drawing tools' })).toBeVisible();
+  await pickWord(host.page);
   await expect(guest.page.getByRole('toolbar')).toHaveCount(0);
   await expect(guest.page.getByRole('status')).toContainText('Ada is drawing');
   await Promise.all([host, guest].map((p) => p.context.close()));
@@ -190,6 +197,7 @@ test('back to lobby wipes the board for the next round', async ({ browser }) => 
   await expect(guest.page.getByRole('button', { name: 'Start game' })).toBeVisible();
   await host.page.getByRole('button', { name: 'Start game' }).click();
   await expect(canvas(guest.page)).toBeVisible();
+  await pickWord(host.page);
   await expect.poll(() => pixel(guest.page, 0.5, 0.5)).toEqual(WHITE);
   await Promise.all([host, guest].map((p) => p.context.close()));
 });
@@ -206,6 +214,7 @@ test('the studio fits a phone-sized screen', async ({ browser }) => {
   await joinRoom(page, code, 'Bo');
   await host.page.getByRole('button', { name: 'Start game' }).click();
   await expect(canvas(page)).toBeVisible();
+  await pickWord(host.page);
   const overflow = () =>
     page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,

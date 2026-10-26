@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { JoinResult, Profile, RoomError, RoomSettings, RoomState } from '@inkling/shared';
+import type {
+  ChatMessage,
+  JoinResult,
+  PrivateState,
+  Profile,
+  RoomError,
+  RoomSettings,
+  RoomState,
+} from '@inkling/shared';
 import { loadSeat, saveProfile, saveSeat } from './session';
 import { socket } from './socket';
 
@@ -11,8 +19,12 @@ export const ERROR_TEXT: Record<RoomError, string> = {
   'not-in-room': 'You are not in a room.',
   'not-host': 'Only the host can do that.',
   'need-players': 'You need at least two players to start.',
-  'wrong-phase': 'The game is already underway.',
+  'wrong-phase': 'That is not possible right now.',
+  'bad-choice': 'That word is not on offer.',
 };
+
+const NO_SECRETS: PrivateState = { choices: null, word: null };
+const CHAT_KEPT = 200;
 
 /** Room membership: create, join, leave, host settings, and seat recovery after a dropped connection. */
 export function useRoom(profile: Profile) {
@@ -20,6 +32,8 @@ export function useRoom(profile: Profile) {
   const [myId, setMyId] = useState<string | null>(null);
   const [error, setError] = useState<RoomError | null>(null);
   const [busy, setBusy] = useState(false);
+  const [secrets, setSecrets] = useState<PrivateState>(NO_SECRETS);
+  const [chat, setChat] = useState<ChatMessage[]>([]);
   // Latest profile for the reconnect handler without re-subscribing it.
   const profileRef = useRef(profile);
   profileRef.current = profile;
@@ -53,12 +67,24 @@ export function useRoom(profile: Profile) {
         adopt,
       );
     };
+    const onSecrets = (state: PrivateState) => setSecrets(state);
+    const onLine = (line: ChatMessage) =>
+      setChat((log) =>
+        log.some((m) => m.id === line.id) ? log : [...log, line].slice(-CHAT_KEPT),
+      );
+    const onHistory = (log: ChatMessage[]) => setChat(log);
     socket.on('room:state', onState);
     socket.on('connect', onConnect);
+    socket.on('game:private', onSecrets);
+    socket.on('chat:message', onLine);
+    socket.on('chat:history', onHistory);
     if (socket.connected) onConnect();
     return () => {
       socket.off('room:state', onState);
       socket.off('connect', onConnect);
+      socket.off('game:private', onSecrets);
+      socket.off('chat:message', onLine);
+      socket.off('chat:history', onHistory);
     };
   }, [adopt]);
 
@@ -86,6 +112,8 @@ export function useRoom(profile: Profile) {
     setRoom(null);
     setMyId(null);
     setError(null);
+    setSecrets(NO_SECRETS);
+    setChat([]);
   }, []);
 
   const updateSettings = useCallback((patch: Partial<RoomSettings>) => {
@@ -106,6 +134,22 @@ export function useRoom(profile: Profile) {
     });
   }, []);
 
+  const chooseWord = useCallback((index: number) => {
+    socket.emit('word:choose', index, (res) => {
+      if (!res.ok) setError(res.error);
+    });
+  }, []);
+
+  const sendChat = useCallback((text: string) => {
+    socket.emit('chat:send', text);
+  }, []);
+
+  const setWords = useCallback((words: string[], only: boolean) => {
+    socket.emit('room:words', { words, only }, (res) => {
+      if (!res.ok) setError(res.error);
+    });
+  }, []);
+
   const clearError = useCallback(() => setError(null), []);
 
   return {
@@ -119,6 +163,11 @@ export function useRoom(profile: Profile) {
     updateSettings,
     startGame,
     backToLobby,
+    chooseWord,
+    sendChat,
+    setWords,
+    secrets,
+    chat,
     clearError,
   };
 }

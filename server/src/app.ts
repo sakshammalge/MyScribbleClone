@@ -16,7 +16,12 @@ export interface InklingServer {
   rooms: RoomManager;
 }
 
-export function createInklingServer(): InklingServer {
+export interface ServerOptions {
+  /** Multiplies the word-choice and reveal pauses; only end-to-end tests set this. */
+  timeScale?: number;
+}
+
+export function createInklingServer(options: ServerOptions = {}): InklingServer {
   const app = express();
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true, version: VERSION });
@@ -31,10 +36,22 @@ export function createInklingServer(): InklingServer {
   const http = createServer(app);
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(http);
 
-  const rooms = new RoomManager((room, code) => {
-    // A null room means it was deleted; nobody is left to notify.
-    if (room) io.to(code).emit('room:state', room);
-  });
+  const rooms = new RoomManager(
+    (room, code) => {
+      // A null room means it was deleted; nobody is left to notify.
+      if (room) io.to(code).emit('room:state', room);
+    },
+    undefined,
+    {
+      timeScale: options.timeScale,
+      chat: (socketIds, message) => {
+        for (const id of socketIds) io.to(id).emit('chat:message', message);
+      },
+      private: (socketId, state) => {
+        io.to(socketId).emit('game:private', state);
+      },
+    },
+  );
 
   io.on('connection', (socket) => {
     socket.emit('hello', { serverTime: Date.now(), version: VERSION });
@@ -56,8 +73,9 @@ export function createInklingServer(): InklingServer {
       if (result.ok) {
         enter(result.room.code);
         // Rejoining mid-drawing (refresh, reconnect): hand over the picture so far.
-        if (result.room.phase === 'drawing')
-          socket.emit('canvas:replay', rooms.canvasOps(socket.id));
+        socket.emit('canvas:replay', rooms.canvasOps(socket.id));
+        socket.emit('chat:history', rooms.chatHistory(socket.id));
+        socket.emit('game:private', rooms.privateState(socket.id));
       }
       if (typeof ack === 'function') ack(result);
     });
@@ -68,6 +86,21 @@ export function createInklingServer(): InklingServer {
     socket.on('room:start', (ack) => {
       const result = rooms.start(socket.id);
       if (typeof ack === 'function') ack(result);
+    });
+    socket.on('room:words', (req, ack) => {
+      const result = rooms.setWords(socket.id, req);
+      if (typeof ack === 'function') ack(result);
+    });
+    socket.on('word:choose', (index, ack) => {
+      const result = rooms.chooseWord(socket.id, index);
+      if (typeof ack === 'function') ack(result);
+    });
+    socket.on('chat:send', (text, ack) => {
+      const result = rooms.chat(socket.id, text);
+      if (typeof ack === 'function') ack(result);
+    });
+    socket.on('game:sync', (ack) => {
+      if (typeof ack === 'function') ack(rooms.privateState(socket.id));
     });
     socket.on('room:lobby', (ack) => {
       const result = rooms.backToLobby(socket.id);
