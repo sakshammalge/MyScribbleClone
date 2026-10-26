@@ -12,6 +12,6 @@ services:
       - key: NODE_ENV
         value: production
       - key: INKLING_LAN
-        value: "0"
+        value: '0'
       - key: INKLING_TRUST_PROXY
-        value: "1"
+        value: '1'
