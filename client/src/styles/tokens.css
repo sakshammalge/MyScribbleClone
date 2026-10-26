@@ -1,0 +1,55 @@
+/* Inkling design tokens. Components read these; never hard-code colours. */
+:root {
+  --font-display: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+  --font-body: system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 40px;
+
+  /* Light: warm paper, indigo ink, persimmon accent */
+  --color-bg: #f6f1e7;
+  --color-surface: #fffdf8;
+  --color-ink: #1e1a42;
+  --color-ink-muted: #5d587f;
+  --color-border: #ddd5c3;
+  --color-accent: #ff6b3d;
+  --color-accent-ink: #ffffff;
+  --color-highlight: #ffd23f;
+  --color-good: #1f9d8a;
+  --color-bad: #d6455d;
+  --shadow-card: 0 2px 0 var(--color-border), 0 10px 30px rgb(30 26 66 / 8%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --color-bg: #14122b;
+    --color-surface: #1d1a3d;
+    --color-ink: #f3eedf;
+    --color-ink-muted: #a9a4cc;
+    --color-border: #342f66;
+    --color-accent: #ff7d54;
+    --color-accent-ink: #1a1030;
+    --color-good: #3cc7b0;
+    --color-bad: #ff7088;
+    --shadow-card: 0 2px 0 var(--color-border), 0 10px 30px rgb(0 0 0 / 35%);
+  }
+}
+
+:root[data-theme='dark'] {
+  --color-bg: #14122b;
+  --color-surface: #1d1a3d;
+  --color-ink: #f3eedf;
+  --color-ink-muted: #a9a4cc;
+  --color-border: #342f66;
+  --color-accent: #ff7d54;
+  --color-accent-ink: #1a1030;
+  --color-good: #3cc7b0;
+  --color-bad: #ff7088;
+  --shadow-card: 0 2px 0 var(--color-border), 0 10px 30px rgb(0 0 0 / 35%);
+}
