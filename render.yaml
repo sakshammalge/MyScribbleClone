@@ -1,0 +1,17 @@
+# Render Blueprint for Inkling. Game state lives in memory, so run exactly one instance.
+services:
+  - type: web
+    name: inkling
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free # sleeps after ~15 min idle; rooms are lost on sleep or redeploy
+    numInstances: 1
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: INKLING_LAN
+        value: '0'
+      - key: INKLING_TRUST_PROXY
+        value: '1'
