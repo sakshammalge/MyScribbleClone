@@ -18,6 +18,7 @@ interface GameProps {
   chat: ChatMessage[];
   onLeave: () => void;
   onLobby: () => void;
+  onKick: (playerId: string) => void;
   onRematch: () => void;
   onChoose: (index: number) => void;
   onChat: (text: string) => void;
@@ -39,6 +40,7 @@ export function Game({
   chat,
   onLeave,
   onLobby,
+  onKick,
   onRematch,
   onChoose,
   onChat,
@@ -108,6 +110,16 @@ export function Game({
               </span>
               <span className="rail-tags">
                 <span className="place">#{place}</span>
+                {me?.isHost && p.id !== myId && room.phase !== 'ended' && (
+                  <button
+                    type="button"
+                    className="kick"
+                    aria-label={`Remove ${p.name}`}
+                    onClick={() => onKick(p.id)}
+                  >
+                    ✕
+                  </button>
+                )}
                 {p.id === myId && <span className="badge">you</span>}
                 {p.id === room.drawerId && room.phase !== 'ended' && (
                   <span className="badge pen">drawing</span>

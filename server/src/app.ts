@@ -5,10 +5,14 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { Server } from 'socket.io';
 import type { ClientToServerEvents, ServerToClientEvents } from '@inkling/shared';
+import { socketLimits } from './ratelimit';
 import { RoomManager } from './rooms';
 
 const VERSION = '0.1.0';
 const clientDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../client/dist');
+
+/** True when the Vite build is present, so the server can serve the whole game itself. */
+export const clientBuilt = existsSync(clientDist);
 
 export interface InklingServer {
   http: HttpServer;
@@ -28,7 +32,7 @@ export function createInklingServer(options: ServerOptions = {}): InklingServer 
   });
 
   // In production the built client is served from the same origin as the sockets.
-  if (existsSync(clientDist)) {
+  if (clientBuilt) {
     app.use(express.static(clientDist));
     app.get('*', (_req, res) => res.sendFile(resolve(clientDist, 'index.html')));
   }
@@ -57,62 +61,111 @@ export function createInklingServer(options: ServerOptions = {}): InklingServer 
     socket.emit('hello', { serverTime: Date.now(), version: VERSION });
     socket.on('ping', (ack) => ack(Date.now()));
 
+    const limits = socketLimits();
+    /** Wraps a handler so a flooding socket is told to slow down instead of being served. */
+    const limited =
+      <A extends unknown[]>(bucket: keyof typeof limits, handler: (...args: A) => void) =>
+      (...args: A) => {
+        if (limits[bucket].take()) return handler(...args);
+        const ack = args[args.length - 1];
+        if (typeof ack === 'function') ack({ ok: false, error: 'rate-limited' });
+      };
+
     // Socket.IO rooms mirror game rooms so broadcasts are one call.
     const enter = (code: string) => {
       for (const r of socket.rooms) if (r !== socket.id) void socket.leave(r);
       void socket.join(code);
     };
 
-    socket.on('room:create', (profile, ack) => {
-      const result = rooms.create(socket.id, profile);
-      if (result.ok) enter(result.room.code);
-      if (typeof ack === 'function') ack(result);
-    });
-    socket.on('room:join', (req, ack) => {
-      const result = rooms.join(socket.id, req?.code, req?.profile, req?.token);
-      if (result.ok) {
-        enter(result.room.code);
-        // Rejoining mid-drawing (refresh, reconnect): hand over the picture so far.
-        socket.emit('canvas:replay', rooms.canvasOps(socket.id));
-        socket.emit('chat:history', rooms.chatHistory(socket.id));
-        socket.emit('game:private', rooms.privateState(socket.id));
-      }
-      if (typeof ack === 'function') ack(result);
-    });
-    socket.on('room:settings', (patch, ack) => {
-      const result = rooms.updateSettings(socket.id, patch);
-      if (typeof ack === 'function') ack(result);
-    });
-    socket.on('room:start', (ack) => {
-      const result = rooms.start(socket.id);
-      if (typeof ack === 'function') ack(result);
-    });
-    socket.on('room:words', (req, ack) => {
-      const result = rooms.setWords(socket.id, req);
-      if (typeof ack === 'function') ack(result);
-    });
-    socket.on('word:choose', (index, ack) => {
-      const result = rooms.chooseWord(socket.id, index);
-      if (typeof ack === 'function') ack(result);
-    });
-    socket.on('chat:send', (text, ack) => {
-      const result = rooms.chat(socket.id, text);
-      if (typeof ack === 'function') ack(result);
-    });
+    socket.on(
+      'room:create',
+      limited('actions', (profile, ack) => {
+        const result = rooms.create(socket.id, profile);
+        if (result.ok) enter(result.room.code);
+        if (typeof ack === 'function') ack(result);
+      }),
+    );
+    socket.on(
+      'room:join',
+      limited('actions', (req, ack) => {
+        const result = rooms.join(socket.id, req?.code, req?.profile, req?.token);
+        if (result.ok) {
+          enter(result.room.code);
+          // Rejoining mid-drawing (refresh, reconnect): hand over the picture so far.
+          socket.emit('canvas:replay', rooms.canvasOps(socket.id));
+          socket.emit('chat:history', rooms.chatHistory(socket.id));
+          socket.emit('game:private', rooms.privateState(socket.id));
+        }
+        if (typeof ack === 'function') ack(result);
+      }),
+    );
+    socket.on(
+      'room:settings',
+      limited('actions', (patch, ack) => {
+        const result = rooms.updateSettings(socket.id, patch);
+        if (typeof ack === 'function') ack(result);
+      }),
+    );
+    socket.on(
+      'room:start',
+      limited('actions', (ack) => {
+        const result = rooms.start(socket.id);
+        if (typeof ack === 'function') ack(result);
+      }),
+    );
+    socket.on(
+      'room:words',
+      limited('actions', (req, ack) => {
+        const result = rooms.setWords(socket.id, req);
+        if (typeof ack === 'function') ack(result);
+      }),
+    );
+    socket.on(
+      'word:choose',
+      limited('actions', (index, ack) => {
+        const result = rooms.chooseWord(socket.id, index);
+        if (typeof ack === 'function') ack(result);
+      }),
+    );
+    socket.on(
+      'chat:send',
+      limited('chat', (text, ack) => {
+        const result = rooms.chat(socket.id, text);
+        if (typeof ack === 'function') ack(result);
+      }),
+    );
     socket.on('game:sync', (ack) => {
       if (typeof ack === 'function') ack(rooms.privateState(socket.id));
     });
-    socket.on('room:lobby', (ack) => {
-      const result = rooms.backToLobby(socket.id);
-      if (typeof ack === 'function') ack(result);
-    });
-    socket.on('canvas:event', (raw) => {
-      const relay = rooms.canvasEvent(socket.id, raw);
-      if (relay) socket.to(relay.code).emit('canvas:event', relay.event);
-    });
+    socket.on(
+      'room:lobby',
+      limited('actions', (ack) => {
+        const result = rooms.backToLobby(socket.id);
+        if (typeof ack === 'function') ack(result);
+      }),
+    );
+    socket.on(
+      'canvas:event',
+      limited('canvas', (raw) => {
+        const relay = rooms.canvasEvent(socket.id, raw);
+        if (relay) socket.to(relay.code).emit('canvas:event', relay.event);
+      }),
+    );
     socket.on('canvas:sync', (ack) => {
       if (typeof ack === 'function') ack(rooms.canvasOps(socket.id));
     });
+    socket.on(
+      'room:kick',
+      limited('actions', (playerId, ack) => {
+        const result = rooms.kick(socket.id, playerId);
+        if (result.ok && result.socketId) {
+          const kicked = io.sockets.sockets.get(result.socketId);
+          kicked?.emit('room:kicked');
+          for (const r of kicked?.rooms ?? []) if (r !== result.socketId) void kicked?.leave(r);
+        }
+        if (typeof ack === 'function') ack(result.ok ? { ok: true } : result);
+      }),
+    );
     socket.on('room:leave', () => {
       // Leave the socket room first so the leaver is not sent the update about their own exit.
       for (const r of socket.rooms) if (r !== socket.id) void socket.leave(r);

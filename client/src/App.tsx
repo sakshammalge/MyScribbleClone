@@ -22,6 +22,7 @@ export function App() {
     updateSettings,
     startGame,
     backToLobby,
+    kick,
     chooseWord,
     sendChat,
     setWords,
@@ -56,6 +57,7 @@ export function App() {
         chat={chat}
         onLeave={leaveRoom}
         onLobby={backToLobby}
+        onKick={kick}
         onRematch={startGame}
         onChoose={chooseWord}
         onChat={sendChat}
@@ -69,6 +71,7 @@ export function App() {
         room={room}
         myId={myId}
         onLeave={leaveRoom}
+        onKick={kick}
         chat={chat}
         onSettings={updateSettings}
         onWords={setWords}

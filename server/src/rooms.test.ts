@@ -73,6 +73,22 @@ describe('RoomManager', () => {
     expect(last.settings.maxPlayers).toBe(2); // cannot drop below seated players
   });
 
+  it('lets only the host kick, never themselves, and bars the kicked name', () => {
+    const host = rooms.create('s1', me('Ada'));
+    if (!host.ok) throw new Error('create failed');
+    const guest = rooms.join('s2', host.room.code, me('Bo'));
+    if (!guest.ok) throw new Error('join failed');
+    expect(rooms.kick('s2', host.playerId)).toEqual({ ok: false, error: 'not-host' });
+    expect(rooms.kick('s1', host.playerId)).toEqual({ ok: false, error: 'bad-target' });
+    expect(rooms.kick('s1', 'nobody')).toEqual({ ok: false, error: 'bad-target' });
+    expect(rooms.kick('s1', guest.playerId)).toEqual({ ok: true, socketId: 's2' });
+    expect(changes.at(-1)?.players.map((p) => p.name)).toEqual(['Ada']);
+    expect(rooms.join('s3', host.room.code, me('bo'))).toEqual({ ok: false, error: 'kicked' });
+    expect(rooms.join('s2', host.room.code, me('Bo'), guest.token)).toMatchObject({
+      ok: false,
+    });
+  });
+
   it('hands the host role over when the host leaves, and deletes empty rooms', () => {
     const { room } = create('a', 'Ada');
     rooms.join('b', room.code, me('Bo'));
