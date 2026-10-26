@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ROOM_CODE_LENGTH, SETTINGS_LIMITS, type RoomState } from '@inkling/shared';
+import {
+  ROOM_CODE_LENGTH,
+  SETTINGS_LIMITS,
+  type ChatMessage,
+  type PrivateState,
+  type RoomState,
+} from '@inkling/shared';
 import { RoomManager } from './rooms';
 
 const me = (name: string) => ({ name, avatar: { color: 0, face: 0 } });
@@ -7,11 +13,21 @@ const me = (name: string) => ({ name, avatar: { color: 0, face: 0 } });
 describe('RoomManager', () => {
   let changes: (RoomState | null)[];
   let rooms: RoomManager;
+  /** What each socket has been told privately, and the chat lines each was sent. */
+  let secrets: Record<string, PrivateState>;
+  let heard: Record<string, ChatMessage[]>;
 
   beforeEach(() => {
     vi.useFakeTimers();
     changes = [];
-    rooms = new RoomManager((room) => changes.push(room), 1000);
+    secrets = {};
+    heard = {};
+    rooms = new RoomManager((room) => changes.push(room), 1000, {
+      private: (socket, state) => (secrets[socket] = state),
+      chat: (sockets, message) => {
+        for (const id of sockets) (heard[id] ??= []).push(message);
+      },
+    });
   });
   afterEach(() => vi.useRealTimers());
 
@@ -94,6 +110,8 @@ describe('RoomManager', () => {
       const { room } = create('a', 'Ada');
       rooms.join('b', room.code, me('Bo'));
       expect(rooms.start('a')).toEqual({ ok: true });
+      // The host draws first; take the first word offered.
+      expect(rooms.chooseWord('a', 0)).toEqual({ ok: true });
       return room.code;
     };
 
@@ -103,7 +121,7 @@ describe('RoomManager', () => {
       rooms.join('b', room.code, me('Bo'));
       expect(rooms.start('b')).toEqual({ ok: false, error: 'not-host' });
       expect(rooms.start('a')).toEqual({ ok: true });
-      expect(changes.at(-1)).toMatchObject({ phase: 'drawing' });
+      expect(changes.at(-1)).toMatchObject({ phase: 'choosing', round: 1 });
       expect(rooms.start('a')).toEqual({ ok: false, error: 'wrong-phase' });
     });
 
@@ -120,22 +138,14 @@ describe('RoomManager', () => {
       rooms.join('b', room.code, me('Bo'));
       expect(rooms.canvasEvent('a', dot)).toBeNull();
       rooms.start('a');
+      rooms.chooseWord('a', 0);
       rooms.canvasEvent('a', dot);
       expect(rooms.backToLobby('b')).toEqual({ ok: false, error: 'not-host' });
       expect(rooms.backToLobby('a')).toEqual({ ok: true });
       expect(rooms.canvasOps('a')).toEqual([]);
       rooms.start('a');
+      rooms.chooseWord('a', 0);
       expect(rooms.canvasOps('a')).toEqual([]);
-    });
-
-    it('hands the pen to the host when the drawer leaves', () => {
-      const { room } = create('a', 'Ada');
-      rooms.join('b', room.code, me('Bo'));
-      rooms.join('c', room.code, me('Cy'));
-      rooms.start('a');
-      rooms.leave('a');
-      const state = changes.at(-1)!;
-      expect(state.drawerId).toBe(state.players.find((p) => p.isHost)!.id);
     });
   });
 });

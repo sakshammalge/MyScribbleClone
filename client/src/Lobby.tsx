@@ -1,13 +1,24 @@
 import { useState } from 'react';
-import { APP_NAME, SETTINGS_LIMITS, type RoomSettings, type RoomState } from '@inkling/shared';
+import {
+  APP_NAME,
+  CUSTOM_WORDS,
+  SETTINGS_LIMITS,
+  type ChatMessage,
+  type RoomSettings,
+  type RoomState,
+} from '@inkling/shared';
 import { Avatar } from './Avatar';
+import { Chat } from './Chat';
 import { inviteUrl } from './route';
 
 interface LobbyProps {
   room: RoomState;
   myId: string;
   onLeave: () => void;
+  chat: ChatMessage[];
   onSettings: (patch: Partial<RoomSettings>) => void;
+  onWords: (words: string[], only: boolean) => void;
+  onChat: (text: string) => void;
   onStart: () => void;
 }
 
@@ -17,8 +28,19 @@ const SETTING_LABELS: Record<keyof RoomSettings, { label: string; unit: string }
   maxPlayers: { label: 'Max players', unit: '' },
 };
 
-export function Lobby({ room, myId, onLeave, onSettings, onStart }: LobbyProps) {
+export function Lobby({
+  room,
+  myId,
+  chat,
+  onLeave,
+  onSettings,
+  onWords,
+  onChat,
+  onStart,
+}: LobbyProps) {
   const [copied, setCopied] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [only, setOnly] = useState(false);
   const me = room.players.find((p) => p.id === myId);
   const isHost = me?.isHost ?? false;
   const link = inviteUrl(room.code);
@@ -31,6 +53,10 @@ export function Lobby({ room, myId, onLeave, onSettings, onStart }: LobbyProps) 
     } catch {
       // Clipboard needs a secure context; over plain LAN http the link is still shown to select.
     }
+  };
+
+  const saveWords = () => {
+    onWords(draft.split(/[\n,]/), only);
   };
 
   return (
@@ -134,6 +160,53 @@ export function Lobby({ room, myId, onLeave, onSettings, onStart }: LobbyProps) 
                 : 'Waiting for the host to start.'}
           </p>
         </section>
+
+        <section className="card" aria-label="Custom words">
+          <h2>
+            Your own words{' '}
+            <span className="count" data-testid="custom-count">
+              {room.customWordCount}
+            </span>
+          </h2>
+          {isHost ? (
+            <>
+              <label className="field">
+                One per line, or separated by commas
+                <textarea
+                  aria-label="Custom words"
+                  rows={4}
+                  value={draft}
+                  maxLength={CUSTOM_WORDS.maxWords * (CUSTOM_WORDS.maxLength + 1)}
+                  placeholder={'inside joke\nour office dog\nthat one meeting'}
+                  onChange={(e) => setDraft(e.target.value)}
+                />
+              </label>
+              <label className="check">
+                <input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} />
+                Use only my words
+              </label>
+              <button type="button" className="btn secondary" onClick={saveWords}>
+                Save words
+              </button>
+              <p className="muted">
+                Mixed in with the built-in list unless you tick the box. Players never see them
+                until they come up.
+              </p>
+            </>
+          ) : (
+            <p className="muted">
+              {room.customWordCount === 0
+                ? 'The host has not added any words of their own.'
+                : room.customWordsOnly
+                  ? `The game will use only the host’s ${room.customWordCount} words.`
+                  : `${room.customWordCount} of the host’s words are mixed in.`}
+            </p>
+          )}
+        </section>
+
+        <div className="lobby-chat">
+          <Chat messages={chat} onSend={onChat} placeholder="Say hello…" />
+        </div>
       </div>
     </main>
   );

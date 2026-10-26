@@ -3,7 +3,9 @@ import { createInklingServer } from './app';
 import { lanAddresses } from './lan';
 
 const port = Number(process.env.PORT ?? DEFAULT_PORT);
-const { http } = createInklingServer();
+// INKLING_TIME_SCALE=0.1 shortens the pauses between turns (used by e2e tests).
+const timeScale = Number(process.env.INKLING_TIME_SCALE) || undefined;
+const { http } = createInklingServer({ timeScale });
 
 // Bind every interface so other machines on the LAN can reach us.
 http.listen(port, '0.0.0.0', () => {

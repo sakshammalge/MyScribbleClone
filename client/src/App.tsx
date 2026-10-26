@@ -22,6 +22,11 @@ export function App() {
     updateSettings,
     startGame,
     backToLobby,
+    chooseWord,
+    sendChat,
+    setWords,
+    secrets,
+    chat,
     clearError,
   } = useRoom(profile);
   const inviteCode = codeFromPath(path);
@@ -42,8 +47,19 @@ export function App() {
     goHome();
   };
 
-  if (room && myId && room.phase === 'drawing') {
-    return <Game room={room} myId={myId} onLeave={leaveRoom} onLobby={backToLobby} />;
+  if (room && myId && room.phase !== 'lobby') {
+    return (
+      <Game
+        room={room}
+        myId={myId}
+        secrets={secrets}
+        chat={chat}
+        onLeave={leaveRoom}
+        onLobby={backToLobby}
+        onChoose={chooseWord}
+        onChat={sendChat}
+      />
+    );
   }
 
   if (room && myId) {
@@ -52,7 +68,10 @@ export function App() {
         room={room}
         myId={myId}
         onLeave={leaveRoom}
+        chat={chat}
         onSettings={updateSettings}
+        onWords={setWords}
+        onChat={sendChat}
         onStart={startGame}
       />
     );

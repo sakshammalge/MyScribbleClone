@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
 import {
   BRUSH_SIZES,
   CANVAS_HEIGHT,
@@ -19,9 +19,13 @@ interface BoardProps {
   /** True for the one player holding the pen; everyone else just watches. */
   canDraw: boolean;
   drawerName: string;
+  /** What to say under the sheet when the viewer is not holding the pen. */
+  note: string;
+  /** Laid over the paper, e.g. the word picker or the end-of-turn scores. */
+  children?: ReactNode;
 }
 
-export function Board({ canDraw, drawerName }: BoardProps) {
+export function Board({ canDraw, drawerName, note, children }: BoardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const surface = useRef<Surface | null>(null);
@@ -184,6 +188,7 @@ export function Board({ canDraw, drawerName }: BoardProps) {
           onPointerLeave={hideCursor}
         />
         {canDraw && <div ref={cursorRef} className="brush-ring" data-tool={tool} hidden />}
+        {children}
       </div>
       {canDraw ? (
         <Toolbar
@@ -205,7 +210,7 @@ export function Board({ canDraw, drawerName }: BoardProps) {
           <span className="pencil" aria-hidden="true">
             ✎
           </span>
-          {drawerName} is drawing…
+          {note}
         </p>
       )}
     </div>

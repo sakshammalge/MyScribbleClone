@@ -6,6 +6,7 @@ import type {
   ClientToServerEvents,
   DrawOp,
   JoinResult,
+  PrivateState,
   RoomState,
   ServerToClientEvents,
 } from '@inkling/shared';
@@ -83,7 +84,10 @@ describe('canvas events over sockets', () => {
     if (!created.ok) throw new Error(created.error);
     const code = created.room.code;
     await new Promise<JoinResult>((r) => b.emit('room:join', { code, profile: profile('Bo') }, r));
+    const offer = new Promise<PrivateState>((r) => a.on('game:private', (s) => s.choices && r(s)));
     await new Promise((r) => a.emit('room:start', r));
+    await offer;
+    await new Promise((r) => a.emit('word:choose', 0, r));
 
     const seen: CanvasEvent[] = [];
     b.on('canvas:event', (e) => seen.push(e));

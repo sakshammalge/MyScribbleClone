@@ -1,17 +1,33 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
 import { Board } from './canvas';
 import {
+  cleanWords,
+  drawerPoints,
+  guessPoints,
+  hintOrder,
+  isClose,
+  isCorrect,
+  maskWord,
+  wordChoices,
+} from './game';
+import { WORD_BANK } from './wordlist';
+import {
   AVATAR_COLORS,
   AVATAR_FACES,
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
+  CHAT_MAX_LENGTH,
   SETTINGS_LIMITS,
+  TURN_TIMING,
   cleanName,
   defaultSettings,
   normalizeCode,
   parseCanvasEvent,
+  type ActionResult,
   type CanvasEvent,
+  type ChatMessage,
   type DrawOp,
+  type PrivateState,
   type Profile,
   type RoomError,
   type RoomSettings,
@@ -28,6 +44,21 @@ interface Seat {
   avatar: Profile['avatar'];
   socketId: string | null;
   dropTimer: ReturnType<typeof setTimeout> | null;
+  score: number;
+}
+
+/** Where the server sends things that are not part of the shared room snapshot. */
+export interface RoomHooks {
+  chat?: (socketIds: string[], message: ChatMessage) => void;
+  private?: (socketId: string, state: PrivateState) => void;
+  /** Multiplies the word-choice and reveal pauses; the draw time is always as configured. */
+  timeScale?: number;
+}
+
+interface Logged {
+  message: ChatMessage;
+  /** Player ids allowed to see it, or null for everyone. */
+  to: string[] | null;
 }
 
 interface Room {
@@ -38,7 +69,29 @@ interface Room {
   phase: RoomState['phase'];
   drawerId: string | null;
   board: Board;
+  round: number;
+  turn: number;
+  /** Players still to draw this round, in order. */
+  queue: string[];
+  choices: string[] | null;
+  word: string | null;
+  hintOrder: number[];
+  revealed: Set<number>;
+  phaseEndsAt: number | null;
+  phaseMs: number;
+  timers: ReturnType<typeof setTimeout>[];
+  /** Points each correct guesser took this turn, in the order they guessed. */
+  guessed: Map<string, number>;
+  reveal: RoomState['reveal'];
+  customWords: string[];
+  customOnly: boolean;
+  used: Set<string>;
+  chat: Logged[];
+  chatSeq: number;
 }
+
+const CHAT_LOG_SIZE = 100;
+const MIN_PHASE_MS = 150;
 
 export type Joined = { ok: true; room: RoomState; playerId: string; token: string };
 export type Failed = { ok: false; error: RoomError };
@@ -63,6 +116,7 @@ export class RoomManager {
   constructor(
     private onChange: (room: RoomState | null, code: string) => void,
     private graceMs = RECONNECT_GRACE_MS,
+    private hooks: RoomHooks = {},
   ) {}
 
   create(socketId: string, profile: Profile): Joined | Failed {
@@ -77,6 +131,23 @@ export class RoomManager {
       phase: 'lobby',
       drawerId: null,
       board: new Board(),
+      round: 0,
+      turn: 0,
+      queue: [],
+      choices: null,
+      word: null,
+      hintOrder: [],
+      revealed: new Set(),
+      phaseEndsAt: null,
+      phaseMs: 0,
+      timers: [],
+      guessed: new Map(),
+      reveal: null,
+      customWords: [],
+      customOnly: false,
+      used: new Set(),
+      chat: [],
+      chatSeq: 0,
     };
     this.rooms.set(room.code, room);
     const seat = this.seat(room, socketId, name, profile.avatar);
@@ -119,6 +190,7 @@ export class RoomManager {
     const room = where && this.rooms.get(where.code);
     if (!where || !room) return { ok: false, error: 'not-in-room' };
     if (room.hostId !== where.playerId) return { ok: false, error: 'not-host' };
+    if (room.phase !== 'lobby') return { ok: false, error: 'wrong-phase' };
     for (const key of Object.keys(SETTINGS_LIMITS) as (keyof RoomSettings)[]) {
       const value = patch?.[key];
       if (typeof value !== 'number' || !Number.isFinite(value)) continue;
@@ -131,29 +203,116 @@ export class RoomManager {
     return { ok: true };
   }
 
-  /** Host starts the drawing board; the host holds the pen until the game loop rotates it. */
-  start(socketId: string): { ok: true } | Failed {
+  /** Host adds their own words to the pool, or swaps the built-in list out for them. */
+  setWords(socketId: string, req: { words: string[]; only: boolean }): ActionResult {
     const found = this.hostRoom(socketId);
     if (!found.ok) return found;
-    const { room, playerId } = found;
+    const { room } = found;
     if (room.phase !== 'lobby') return { ok: false, error: 'wrong-phase' };
-    if (room.seats.length < 2) return { ok: false, error: 'need-players' };
-    room.phase = 'drawing';
-    room.drawerId = playerId;
-    room.board.clear();
+    room.customWords = cleanWords(req?.words);
+    room.customOnly = Boolean(req?.only) && room.customWords.length > 0;
     this.changed(room);
     return { ok: true };
   }
 
-  backToLobby(socketId: string): { ok: true } | Failed {
+  /** Host starts the game: round one, first drawer. */
+  start(socketId: string): ActionResult {
     const found = this.hostRoom(socketId);
     if (!found.ok) return found;
     const { room } = found;
-    room.phase = 'lobby';
-    room.drawerId = null;
-    room.board.clear();
+    if (room.phase !== 'lobby') return { ok: false, error: 'wrong-phase' };
+    if (room.seats.length < 2) return { ok: false, error: 'need-players' };
+    this.resetGame(room);
+    this.say(room, { kind: 'system', text: 'The game has started. Good luck!' });
+    this.nextTurn(room);
+    return { ok: true };
+  }
+
+  backToLobby(socketId: string): ActionResult {
+    const found = this.hostRoom(socketId);
+    if (!found.ok) return found;
+    const { room } = found;
+    this.resetGame(room);
     this.changed(room);
     return { ok: true };
+  }
+
+  /** The drawer picks one of the offered words (by index) and the clock starts. */
+  chooseWord(socketId: string, index: unknown): ActionResult {
+    const where = this.bySocket.get(socketId);
+    const room = where && this.rooms.get(where.code);
+    if (!where || !room) return { ok: false, error: 'not-in-room' };
+    if (room.phase !== 'choosing' || room.drawerId !== where.playerId || !room.choices) {
+      return { ok: false, error: 'wrong-phase' };
+    }
+    if (typeof index !== 'number' || !Number.isInteger(index) || !room.choices[index]) {
+      return { ok: false, error: 'bad-choice' };
+    }
+    this.beginDrawing(room, room.choices[index]!);
+    return { ok: true };
+  }
+
+  /**
+   * A line typed into the chat. Guessers' lines are checked against the word on the server;
+   * players who already know it only talk to each other, so nothing leaks to those still guessing.
+   */
+  chat(socketId: string, raw: unknown): ActionResult {
+    const where = this.bySocket.get(socketId);
+    const room = where && this.rooms.get(where.code);
+    const seat = room?.seats.find((s) => s.id === where?.playerId);
+    if (!where || !room || !seat) return { ok: false, error: 'not-in-room' };
+    const text = typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim() : '';
+    if (!text) return { ok: true };
+    const line = text.slice(0, CHAT_MAX_LENGTH);
+    const base = { name: seat.name, playerId: seat.id, text: line };
+
+    if (room.phase !== 'drawing' || !room.word) {
+      this.say(room, { kind: 'say', ...base });
+      return { ok: true };
+    }
+    const knows = seat.id === room.drawerId || room.guessed.has(seat.id);
+    if (knows) {
+      const insiders = room.seats.filter((s) => s.id === room.drawerId || room.guessed.has(s.id));
+      this.say(room, { kind: 'say', insiders: true, ...base }, insiders);
+      return { ok: true };
+    }
+    if (isCorrect(line, room.word)) {
+      const remaining = (room.phaseEndsAt ?? 0) - Date.now();
+      const points = guessPoints(remaining / room.phaseMs, room.guessed.size);
+      room.guessed.set(seat.id, points);
+      seat.score += points;
+      this.say(room, {
+        kind: 'correct',
+        name: seat.name,
+        playerId: seat.id,
+        text: 'found the word!',
+      });
+      if (this.everyoneGuessed(room)) this.endTurn(room);
+      else this.changed(room);
+      return { ok: true };
+    }
+    this.say(room, { kind: 'say', ...base });
+    if (isClose(line, room.word)) {
+      this.say(room, { kind: 'close', text: `"${line}" is so close!` }, [seat]);
+    }
+    return { ok: true };
+  }
+
+  /** What this player alone is allowed to know about the turn. */
+  privateState(socketId: string): PrivateState {
+    const where = this.bySocket.get(socketId);
+    const room = where && this.rooms.get(where.code);
+    return room && where ? this.privateFor(room, where.playerId) : { choices: null, word: null };
+  }
+
+  /** Chat lines this player is allowed to see, oldest first. */
+  chatHistory(socketId: string): ChatMessage[] {
+    const where = this.bySocket.get(socketId);
+    const room = where && this.rooms.get(where.code);
+    if (!where || !room) return [];
+    return room.chat
+      .filter((l) => l.to === null || l.to.includes(where.playerId))
+      .map((l) => l.message);
   }
 
   /**
@@ -171,11 +330,13 @@ export class RoomManager {
     return event ? { code: room.code, event } : null;
   }
 
-  /** The drawing to show a viewer, or an empty one outside the drawing phase. */
+  /** The drawing to show a viewer: live while drawing, kept on screen during the reveal. */
   canvasOps(socketId: string): DrawOp[] {
     const where = this.bySocket.get(socketId);
     const room = where && this.rooms.get(where.code);
-    return room?.phase === 'drawing' ? room.board.snapshot() : [];
+    return room && (room.phase === 'drawing' || room.phase === 'reveal')
+      ? room.board.snapshot()
+      : [];
   }
 
   /** Voluntary exit: the seat is freed immediately. */
@@ -196,6 +357,7 @@ export class RoomManager {
     seat.socketId = null;
     seat.dropTimer = setTimeout(() => this.removeSeat(room.code, seat.id), this.graceMs);
     seat.dropTimer.unref?.();
+    // A dropped connection is often just a refresh, so the turn waits for the grace period.
     this.changed(room);
   }
 
@@ -230,9 +392,184 @@ export class RoomManager {
       // Prefer a connected player as the new host.
       room.hostId = (room.seats.find((s) => s.socketId) ?? room.seats[0]!).id;
     }
-    // The pen never stays with someone who left.
-    if (room.drawerId === playerId) room.drawerId = room.hostId;
+    room.queue = room.queue.filter((id) => id !== playerId);
+    room.guessed.delete(playerId);
+    const playing =
+      room.phase === 'choosing' || room.phase === 'drawing' || room.phase === 'reveal';
+    if (playing && room.seats.length < 2) {
+      this.endGame(room);
+    } else if (
+      room.drawerId === playerId &&
+      (room.phase === 'choosing' || room.phase === 'drawing')
+    ) {
+      this.say(room, { kind: 'system', text: `${seat?.name ?? 'The drawer'} left the room.` });
+      this.endTurn(room);
+    } else if (room.phase === 'drawing' && this.everyoneGuessed(room)) {
+      this.endTurn(room);
+    } else {
+      this.changed(room);
+    }
+  }
+
+  private resetGame(room: Room): void {
+    this.clearTimers(room);
+    room.phase = 'lobby';
+    room.drawerId = null;
+    room.round = 0;
+    room.turn = 0;
+    room.queue = [];
+    room.choices = null;
+    room.word = null;
+    room.reveal = null;
+    room.phaseEndsAt = null;
+    room.guessed.clear();
+    room.revealed.clear();
+    room.used.clear();
+    room.board.clear();
+    for (const s of room.seats) s.score = 0;
+  }
+
+  /** Hands the pen to the next player, rolling over into the next round or the final standings. */
+  private nextTurn(room: Room): void {
+    for (let guard = 0; guard < 2; guard++) {
+      while (room.queue.length) {
+        const id = room.queue.shift();
+        const seat = room.seats.find((s) => s.id === id);
+        if (seat?.socketId) return this.startTurn(room, seat);
+      }
+      if (room.round >= room.settings.rounds) break;
+      room.round++;
+      room.queue = room.seats.filter((s) => s.socketId).map((s) => s.id);
+    }
+    this.endGame(room);
+  }
+
+  private startTurn(room: Room, drawer: Seat): void {
+    room.turn++;
+    room.drawerId = drawer.id;
+    room.word = null;
+    room.reveal = null;
+    room.guessed.clear();
+    room.revealed.clear();
+    room.board.clear();
+    room.choices = wordChoices(
+      {
+        bank: WORD_BANK,
+        custom: room.customWords,
+        customOnly: room.customOnly,
+        used: room.used,
+      },
+      TURN_TIMING.wordChoices,
+    );
+    room.phase = 'choosing';
+    this.run(room, TURN_TIMING.chooseSec, () => {
+      // Too slow: the pen picks for them.
+      const picks = room.choices ?? [];
+      if (picks.length) this.beginDrawing(room, picks[Math.floor(Math.random() * picks.length)]!);
+    });
     this.changed(room);
+  }
+
+  private beginDrawing(room: Room, word: string): void {
+    room.used.add(word);
+    room.word = word;
+    room.choices = null;
+    room.hintOrder = hintOrder(word, TURN_TIMING.hintAt.length);
+    room.revealed = new Set();
+    room.phase = 'drawing';
+    const drawMs = this.run(room, room.settings.drawTimeSec, () => this.endTurn(room), false);
+    room.hintOrder.forEach((position, i) => {
+      this.later(room, drawMs * TURN_TIMING.hintAt[i]!, () => {
+        room.revealed.add(position);
+        this.changed(room);
+      });
+    });
+    this.changed(room);
+  }
+
+  /** Scores the drawer, shows the word and the points, then moves on. */
+  private endTurn(room: Room): void {
+    if (room.phase === 'choosing' || !room.word) {
+      // The drawer vanished before picking anything: nothing to reveal.
+      this.nextTurn(room);
+      return;
+    }
+    const drawer = room.seats.find((s) => s.id === room.drawerId);
+    const guessers = room.seats.filter((s) => s.id !== room.drawerId).length;
+    const gains: Record<string, number> = Object.fromEntries(room.guessed);
+    if (drawer) {
+      const bonus = drawerPoints([...room.guessed.values()], guessers);
+      drawer.score += bonus;
+      gains[drawer.id] = bonus;
+    }
+    room.reveal = { word: room.word, gains };
+    room.phase = 'reveal';
+    this.say(room, {
+      kind: 'system',
+      text:
+        room.guessed.size === 0
+          ? `Nobody got it. The word was "${room.word}".`
+          : `The word was "${room.word}".`,
+    });
+    this.run(room, TURN_TIMING.revealSec, () => this.nextTurn(room));
+    this.changed(room);
+  }
+
+  private endGame(room: Room): void {
+    this.clearTimers(room);
+    room.phase = 'ended';
+    room.drawerId = null;
+    room.word = null;
+    room.choices = null;
+    room.reveal = null;
+    room.phaseEndsAt = null;
+    const top = [...room.seats].sort((a, b) => b.score - a.score)[0];
+    if (top)
+      this.say(room, { kind: 'system', text: `Game over! ${top.name} wins with ${top.score}.` });
+    this.changed(room);
+  }
+
+  private everyoneGuessed(room: Room): boolean {
+    const guessers = room.seats.filter((s) => s.id !== room.drawerId && s.socketId);
+    return guessers.length > 0 && guessers.every((s) => room.guessed.has(s.id));
+  }
+
+  /** Starts the one countdown the current phase runs on; returns its real length in ms. */
+  private run(room: Room, seconds: number, then: () => void, scaled = true): number {
+    this.clearTimers(room);
+    const ms = Math.max(MIN_PHASE_MS, seconds * 1000 * (scaled ? (this.hooks.timeScale ?? 1) : 1));
+    room.phaseMs = ms;
+    room.phaseEndsAt = Date.now() + ms;
+    this.later(room, ms, then);
+    return ms;
+  }
+
+  private later(room: Room, ms: number, fn: () => void): void {
+    const t = setTimeout(fn, ms);
+    t.unref?.();
+    room.timers.push(t);
+  }
+
+  private clearTimers(room: Room): void {
+    for (const t of room.timers) clearTimeout(t);
+    room.timers = [];
+  }
+
+  /** Records a chat line and sends it to everyone, or to just the listed seats. */
+  private say(room: Room, message: Omit<ChatMessage, 'id'>, to: Seat[] | null = null): void {
+    const full: ChatMessage = { id: ++room.chatSeq, ...message };
+    room.chat.push({ message: full, to: to && to.map((s) => s.id) });
+    if (room.chat.length > CHAT_LOG_SIZE) room.chat.shift();
+    const ids = (to ?? room.seats).flatMap((s) => (s.socketId ? [s.socketId] : []));
+    this.hooks.chat?.(ids, full);
+  }
+
+  private privateFor(room: Room, playerId: string): PrivateState {
+    if (room.drawerId !== playerId) return { choices: null, word: null };
+    return {
+      choices: room.phase === 'choosing' ? room.choices : null,
+      word: room.phase === 'drawing' ? room.word : null,
+    };
   }
 
   private seat(room: Room, socketId: string, name: string, avatar: Profile['avatar']): Seat {
@@ -243,8 +580,13 @@ export class RoomManager {
       avatar: cleanAvatar(avatar),
       socketId,
       dropTimer: null,
+      score: 0,
     };
     room.seats.push(seat);
+    // Someone arriving mid-round gets a turn at the end of it.
+    if (room.phase === 'choosing' || room.phase === 'drawing' || room.phase === 'reveal') {
+      room.queue.push(seat.id);
+    }
     this.bySocket.set(socketId, { code: room.code, playerId: seat.id });
     return seat;
   }
@@ -264,6 +606,14 @@ export class RoomManager {
       code: room.code,
       phase: room.phase,
       drawerId: room.drawerId,
+      round: room.round,
+      turn: room.turn,
+      phaseEndsAt: room.phaseEndsAt,
+      phaseMs: room.phaseMs,
+      hint: room.phase === 'drawing' && room.word ? maskWord(room.word, room.revealed) : null,
+      reveal: room.reveal,
+      customWordCount: room.customWords.length,
+      customWordsOnly: room.customOnly,
       settings: { ...room.settings },
       players: room.seats.map((s) => ({
         id: s.id,
@@ -271,11 +621,16 @@ export class RoomManager {
         avatar: s.avatar,
         isHost: s.id === room.hostId,
         connected: s.socketId !== null,
+        score: s.score,
+        guessed: room.guessed.has(s.id),
       })),
     };
   }
 
   private changed(room: Room): void {
     this.onChange(this.snapshot(room), room.code);
+    for (const s of room.seats) {
+      if (s.socketId) this.hooks.private?.(s.socketId, this.privateFor(room, s.id));
+    }
   }
 }

@@ -11,6 +11,18 @@ export const SETTINGS_LIMITS = {
   maxPlayers: { min: 2, max: 12, default: 8 },
 } as const;
 
+/** Fixed pacing of a turn; the draw time itself is a room setting. */
+export const TURN_TIMING = {
+  chooseSec: 15,
+  revealSec: 6,
+  wordChoices: 3,
+  /** Share of the draw time already gone when each hint appears. */
+  hintAt: [0.4, 0.7],
+} as const;
+
+export const CUSTOM_WORDS = { maxWords: 300, minLength: 2, maxLength: 30 } as const;
+export const CHAT_MAX_LENGTH = 80;
+
 export const NAME_MAX_LENGTH = 20;
 export const ROOM_CODE_LENGTH = 5;
 /** No 0/O/1/I/L so codes survive being read aloud across the office. */
@@ -33,15 +45,65 @@ export interface PlayerInfo {
   avatar: Avatar;
   isHost: boolean;
   connected: boolean;
+  score: number;
+  /** Has found the word this turn (or, for the drawer, nobody else is guessing for them). */
+  guessed: boolean;
+}
+
+/**
+ * lobby: waiting for the host. choosing: the drawer is picking a word. drawing: the clock is
+ * running. reveal: the word is shown with this turn's points. ended: the final standings.
+ */
+export type Phase = 'lobby' | 'choosing' | 'drawing' | 'reveal' | 'ended';
+
+export interface TurnReveal {
+  word: string;
+  /** Points each player earned this turn, by player id. */
+  gains: Record<string, number>;
 }
 
 export interface RoomState {
   code: string;
-  phase: 'lobby' | 'drawing';
-  /** Who holds the pen while the phase is 'drawing'; the game loop will rotate this. */
+  phase: Phase;
+  /** Who holds the pen this turn; null in the lobby and at the end of the game. */
   drawerId: string | null;
+  /** 1-based round of the game in progress (0 in the lobby). */
+  round: number;
+  /** Counts up with every turn, so the client can tell one drawing from the next. */
+  turn: number;
+  /** Server clock (ms) when the current choosing/drawing/reveal countdown ends. */
+  phaseEndsAt: number | null;
+  /** Length of the current countdown in ms, for drawing a progress bar. */
+  phaseMs: number;
+  /** The word as underscores, with hints filled in; only while the phase is 'drawing'. */
+  hint: string | null;
+  /** Shown during 'reveal' and 'ended'; the word is never in the state before then. */
+  reveal: TurnReveal | null;
+  /** How many host-supplied words are in the pool (the words themselves stay secret). */
+  customWordCount: number;
+  customWordsOnly: boolean;
   players: PlayerInfo[];
   settings: RoomSettings;
+}
+
+/** What only one player may know: the drawer's word options and the chosen word. */
+export interface PrivateState {
+  choices: string[] | null;
+  word: string | null;
+}
+
+export interface ChatMessage {
+  id: number;
+  /**
+   * say: a guess or a remark. correct: someone found the word (the text is never the word).
+   * close: shown only to the guesser who was nearly right. system: game announcements.
+   */
+  kind: 'say' | 'correct' | 'close' | 'system';
+  name?: string;
+  playerId?: string;
+  text: string;
+  /** Said among players who already know the word, so still-guessing players never see it. */
+  insiders?: boolean;
 }
 
 export interface Profile {
@@ -57,7 +119,8 @@ export type RoomError =
   | 'not-in-room'
   | 'not-host'
   | 'need-players'
-  | 'wrong-phase';
+  | 'wrong-phase'
+  | 'bad-choice';
 
 export type JoinResult =
   { ok: true; playerId: string; token: string; room: RoomState } | { ok: false; error: RoomError };
@@ -101,6 +164,11 @@ export interface ServerToClientEvents {
   'canvas:event': (event: CanvasEvent) => void;
   /** The whole drawing so far; replaces whatever the viewer had (join, refresh, reconnect). */
   'canvas:replay': (ops: DrawOp[]) => void;
+  /** This player's secret view of the turn; sent after every change, null fields for guessers. */
+  'game:private': (state: PrivateState) => void;
+  'chat:message': (message: ChatMessage) => void;
+  /** Everything this player may see so far; replaces the chat log (join, refresh, reconnect). */
+  'chat:history': (messages: ChatMessage[]) => void;
 }
 
 /** Events clients emit to the server. Acks carry the result. */
@@ -116,7 +184,18 @@ export interface ClientToServerEvents {
   'room:leave': () => void;
   /** Host only: leave the lobby for the drawing board (needs two players). */
   'room:start': (ack: (result: ActionResult) => void) => void;
-  /** Host only: back to the lobby with a clean board. */
+  /** Drawer only: pick one of the offered words by index, ending the choosing phase early. */
+  'word:choose': (index: number, ack: (result: ActionResult) => void) => void;
+  /** Host only: the custom words to mix into (or replace) the built-in list. */
+  'room:words': (
+    req: { words: string[]; only: boolean },
+    ack: (result: ActionResult) => void,
+  ) => void;
+  /** A guess or a remark; the server decides which it is. */
+  'chat:send': (text: string, ack?: (result: ActionResult) => void) => void;
+  /** Ask for the private state again, e.g. right after mounting the game screen. */
+  'game:sync': (ack: (state: PrivateState) => void) => void;
+  /** Host only: back to the lobby, wiping the board and scores. */
   'room:lobby': (ack: (result: ActionResult) => void) => void;
   /** Drawer only. Strokes arrive in chunks; undo and clear apply to the whole drawing. */
   'canvas:event': (event: CanvasEvent) => void;
