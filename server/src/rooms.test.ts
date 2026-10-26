@@ -86,4 +86,56 @@ describe('RoomManager', () => {
     vi.advanceTimersByTime(1500);
     expect(changes.at(-1)!.players.map((p) => p.name)).toEqual(['Ada']);
   });
+
+  describe('drawing', () => {
+    const dot = { t: 'stroke', id: 's1', tool: 'brush', color: 1, size: 1, points: [0.5, 0.5] };
+
+    const started = () => {
+      const { room } = create('a', 'Ada');
+      rooms.join('b', room.code, me('Bo'));
+      expect(rooms.start('a')).toEqual({ ok: true });
+      return room.code;
+    };
+
+    it('only the host can start, and only with two players', () => {
+      const { room } = create('a', 'Ada');
+      expect(rooms.start('a')).toEqual({ ok: false, error: 'need-players' });
+      rooms.join('b', room.code, me('Bo'));
+      expect(rooms.start('b')).toEqual({ ok: false, error: 'not-host' });
+      expect(rooms.start('a')).toEqual({ ok: true });
+      expect(changes.at(-1)).toMatchObject({ phase: 'drawing' });
+      expect(rooms.start('a')).toEqual({ ok: false, error: 'wrong-phase' });
+    });
+
+    it('lets only the drawer change the canvas', () => {
+      const code = started();
+      expect(rooms.canvasEvent('a', dot)).toEqual({ code, event: dot });
+      expect(rooms.canvasEvent('b', dot)).toBeNull();
+      expect(rooms.canvasEvent('a', { t: 'stroke', id: 'bad id' })).toBeNull();
+      expect(rooms.canvasOps('b')).toHaveLength(1);
+    });
+
+    it('ignores drawing in the lobby and wipes the board on the way back', () => {
+      const { room } = create('a', 'Ada');
+      rooms.join('b', room.code, me('Bo'));
+      expect(rooms.canvasEvent('a', dot)).toBeNull();
+      rooms.start('a');
+      rooms.canvasEvent('a', dot);
+      expect(rooms.backToLobby('b')).toEqual({ ok: false, error: 'not-host' });
+      expect(rooms.backToLobby('a')).toEqual({ ok: true });
+      expect(rooms.canvasOps('a')).toEqual([]);
+      rooms.start('a');
+      expect(rooms.canvasOps('a')).toEqual([]);
+    });
+
+    it('hands the pen to the host when the drawer leaves', () => {
+      const { room } = create('a', 'Ada');
+      rooms.join('b', room.code, me('Bo'));
+      rooms.join('c', room.code, me('Cy'));
+      rooms.start('a');
+      rooms.leave('a');
+      const state = changes.at(-1)!;
+      expect(state.drawerId).toBe(state.players.find((p) => p.isHost)!.id);
+    });
+  });
 });

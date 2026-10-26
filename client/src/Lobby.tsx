@@ -8,6 +8,7 @@ interface LobbyProps {
   myId: string;
   onLeave: () => void;
   onSettings: (patch: Partial<RoomSettings>) => void;
+  onStart: () => void;
 }
 
 const SETTING_LABELS: Record<keyof RoomSettings, { label: string; unit: string }> = {
@@ -16,7 +17,7 @@ const SETTING_LABELS: Record<keyof RoomSettings, { label: string; unit: string }
   maxPlayers: { label: 'Max players', unit: '' },
 };
 
-export function Lobby({ room, myId, onLeave, onSettings }: LobbyProps) {
+export function Lobby({ room, myId, onLeave, onSettings, onStart }: LobbyProps) {
   const [copied, setCopied] = useState(false);
   const me = room.players.find((p) => p.id === myId);
   const isHost = me?.isHost ?? false;
@@ -120,15 +121,17 @@ export function Lobby({ room, myId, onLeave, onSettings }: LobbyProps) {
           <button
             type="button"
             className="btn"
-            disabled
-            title="Drawing rounds arrive in the next milestone"
+            disabled={!isHost || room.players.length < 2}
+            onClick={onStart}
           >
             Start game
           </button>
           <p className="muted">
             {room.players.length < 2
               ? 'Waiting for at least one more player…'
-              : 'Everyone is in. Gameplay lands in the next update.'}
+              : isHost
+                ? 'Everyone is in. Start when you are ready.'
+                : 'Waiting for the host to start.'}
           </p>
         </section>
       </div>
