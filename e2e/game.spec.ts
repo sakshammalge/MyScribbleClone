@@ -315,18 +315,29 @@ test('the game screen fits a phone for the picker and the guessers', async ({ br
   const bo: Player = { name: 'Bo', context: phone, page: await phone.newPage(), frames: [] };
   await joinRoom(bo, code);
   await host.page.getByRole('button', { name: 'Start game' }).click();
+  // Empty when the page fits; otherwise names the elements past the right edge.
   const overflow = () =>
-    bo.page.evaluate(
-      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    bo.page.evaluate(() =>
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        ? []
+        : [...document.querySelectorAll('body *')]
+            .filter(
+              (el) => el.getBoundingClientRect().right > document.documentElement.clientWidth + 1,
+            )
+            .map(
+              (el) =>
+                `${el.tagName.toLowerCase()}.${el.className} ${Math.round(el.getBoundingClientRect().right)}px`,
+            )
+            .slice(0, 8),
     );
   await expect(bo.page.getByTestId('choosing')).toBeVisible();
-  await expect.poll(overflow).toBe(false);
+  await expect.poll(overflow).toEqual([]);
   await pick(host);
   await expect(bo.page.getByTestId('hint')).toBeVisible();
-  await expect.poll(overflow).toBe(false);
+  await expect.poll(overflow).toEqual([]);
   await guess(bo, 'a guess on a small screen');
   await expect(bo.page.getByTestId('chat-log')).toContainText('a guess on a small screen');
-  await expect.poll(overflow).toBe(false);
+  await expect.poll(overflow).toEqual([]);
   await closeAll([host, bo]);
 });
 

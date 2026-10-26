@@ -215,11 +215,22 @@ test('the studio fits a phone-sized screen', async ({ browser }) => {
   await host.page.getByRole('button', { name: 'Start game' }).click();
   await expect(canvas(page)).toBeVisible();
   await pickWord(host.page);
+  // Empty when the page fits; otherwise names the elements past the right edge.
   const overflow = () =>
-    page.evaluate(
-      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    page.evaluate(() =>
+      document.documentElement.scrollWidth <= document.documentElement.clientWidth
+        ? []
+        : [...document.querySelectorAll('body *')]
+            .filter(
+              (el) => el.getBoundingClientRect().right > document.documentElement.clientWidth + 1,
+            )
+            .map(
+              (el) =>
+                `${el.tagName.toLowerCase()}.${el.className} ${Math.round(el.getBoundingClientRect().right)}px`,
+            )
+            .slice(0, 8),
     );
-  await expect.poll(overflow).toBe(false);
+  await expect.poll(overflow).toEqual([]);
   // The drawer's toolbar fits the narrow screen too.
   await expect(host.page.getByRole('toolbar')).toBeVisible();
   await Promise.all([host.context.close(), phone.close()]);
