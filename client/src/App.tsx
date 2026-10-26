@@ -56,6 +56,7 @@ export function App() {
         chat={chat}
         onLeave={leaveRoom}
         onLobby={backToLobby}
+        onRematch={startGame}
         onChoose={chooseWord}
         onChat={sendChat}
       />

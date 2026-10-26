@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PALETTE, SETTINGS_LIMITS, STROKE_LIMITS, parseCanvasEvent } from './index';
+import { PALETTE, SETTINGS_LIMITS, STROKE_LIMITS, parseCanvasEvent, rankPlayers } from './index';
 
 describe('SETTINGS_LIMITS', () => {
   it('keeps defaults inside their ranges', () => {
@@ -46,5 +46,26 @@ describe('parseCanvasEvent', () => {
       { t: 'fill', id: 'f', color: 0, x: 2, y: 0 },
     ];
     for (const b of bad) expect(parseCanvasEvent(b)).toBeNull();
+  });
+});
+
+describe('rankPlayers', () => {
+  it('orders by score and lets equal scores share a place', () => {
+    const ranked = rankPlayers([
+      { name: 'a', score: 100 },
+      { name: 'b', score: 300 },
+      { name: 'c', score: 300 },
+      { name: 'd', score: 0 },
+    ]);
+    expect(ranked.map((r) => [r.player.name, r.place])).toEqual([
+      ['b', 1],
+      ['c', 1],
+      ['a', 3],
+      ['d', 4],
+    ]);
+  });
+
+  it('copes with an empty room', () => {
+    expect(rankPlayers([])).toEqual([]);
   });
 });

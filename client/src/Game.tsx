@@ -1,4 +1,11 @@
-import { APP_NAME, type ChatMessage, type PrivateState, type RoomState } from '@inkling/shared';
+import {
+  APP_NAME,
+  rankPlayers,
+  type ChatMessage,
+  type PlayerInfo,
+  type PrivateState,
+  type RoomState,
+} from '@inkling/shared';
 import { Avatar } from './Avatar';
 import { Board } from './canvas/Board';
 import { Chat } from './Chat';
@@ -11,6 +18,7 @@ interface GameProps {
   chat: ChatMessage[];
   onLeave: () => void;
   onLobby: () => void;
+  onRematch: () => void;
   onChoose: (index: number) => void;
   onChat: (text: string) => void;
 }
@@ -24,13 +32,24 @@ const PHASE_LABEL: Record<RoomState['phase'], string> = {
 };
 
 /** The studio: players on the left, the sheet in the middle, margin notes on the right. */
-export function Game({ room, myId, secrets, chat, onLeave, onLobby, onChoose, onChat }: GameProps) {
+export function Game({
+  room,
+  myId,
+  secrets,
+  chat,
+  onLeave,
+  onLobby,
+  onRematch,
+  onChoose,
+  onChat,
+}: GameProps) {
   const me = room.players.find((p) => p.id === myId);
   const drawer = room.players.find((p) => p.id === room.drawerId);
   const isDrawer = room.drawerId === myId;
   const canDraw = isDrawer && room.phase === 'drawing';
   const { seconds, fraction } = useCountdown(room.phaseEndsAt, room.phaseMs);
-  const ranked = [...room.players].sort((a, b) => b.score - a.score);
+  const ranked = rankPlayers(room.players);
+  const gains = room.phase === 'reveal' ? room.reveal?.gains : undefined;
   const drawerName = drawer?.name ?? 'Someone';
 
   const note =
@@ -57,7 +76,7 @@ export function Game({ room, myId, secrets, chat, onLeave, onLobby, onChoose, on
         <span className="spacer" />
         {me?.isHost && (
           <button type="button" className="link" onClick={onLobby}>
-            {room.phase === 'ended' ? 'Play again' : 'Back to lobby'}
+            Back to lobby
           </button>
         )}
         <button type="button" className="link" onClick={onLeave}>
@@ -67,7 +86,7 @@ export function Game({ room, myId, secrets, chat, onLeave, onLobby, onChoose, on
 
       <aside className="rail" aria-label="Players">
         <ol>
-          {ranked.map((p, i) => (
+          {ranked.map(({ player: p, place }) => (
             <li
               key={p.id}
               className="rail-player"
@@ -77,11 +96,18 @@ export function Game({ room, myId, secrets, chat, onLeave, onLobby, onChoose, on
             >
               <Avatar {...p.avatar} size={40} />
               <span className="player-name">{p.name}</span>
-              <span className="score" data-testid={`score-${p.name}`}>
-                {p.score}
+              <span className="score-cell">
+                <span className="score" data-testid={`score-${p.name}`}>
+                  {p.score}
+                </span>
+                {!!gains?.[p.id] && (
+                  <span className="gain" data-testid={`gain-${p.name}`}>
+                    +{gains[p.id]}
+                  </span>
+                )}
               </span>
               <span className="rail-tags">
-                <span className="place">#{i + 1}</span>
+                <span className="place">#{place}</span>
                 {p.id === myId && <span className="badge">you</span>}
                 {p.id === room.drawerId && room.phase !== 'ended' && (
                   <span className="badge pen">drawing</span>
@@ -129,31 +155,25 @@ export function Game({ room, myId, secrets, chat, onLeave, onLobby, onChoose, on
               <p className="veil-note">
                 The word was <strong>{room.reveal.word}</strong>
               </p>
-              <ul className="gains">
-                {room.players.map((p) => (
-                  <li key={p.id} data-gained={(room.reveal!.gains[p.id] ?? 0) > 0}>
-                    <span>{p.name}</span>
-                    <b>+{room.reveal!.gains[p.id] ?? 0}</b>
-                  </li>
-                ))}
-              </ul>
+              <TurnResults room={room} reveal={room.reveal} />
             </div>
           )}
           {room.phase === 'ended' && (
             <div className="veil" data-testid="standings">
               <p className="veil-note">Game over</p>
-              <ol className="podium">
-                {ranked.map((p, i) => (
-                  <li key={p.id} data-place={i + 1}>
-                    <Avatar {...p.avatar} size={44} />
-                    <span className="player-name">{p.name}</span>
-                    <b>{p.score}</b>
-                  </li>
-                ))}
-              </ol>
-              <p className="muted">
-                {me?.isHost ? 'Press “Play again” for another game.' : 'Waiting for the host…'}
-              </p>
+              <Podium ranked={ranked} myId={myId} />
+              {me?.isHost ? (
+                <div className="veil-actions">
+                  <button type="button" className="btn" onClick={onRematch}>
+                    Play again
+                  </button>
+                  <button type="button" className="link" onClick={onLobby}>
+                    Back to lobby
+                  </button>
+                </div>
+              ) : (
+                <p className="muted">Waiting for the host…</p>
+              )}
             </div>
           )}
         </Board>
@@ -205,5 +225,84 @@ function WordSlip({
       ))}
       <small>{letters}</small>
     </span>
+  );
+}
+
+/** This turn's points, biggest first; the drawer is marked and a blank turn says so. */
+function TurnResults({
+  room,
+  reveal,
+}: {
+  room: RoomState;
+  reveal: NonNullable<RoomState['reveal']>;
+}) {
+  const rows = room.players
+    .map((p) => ({ p, gain: reveal.gains[p.id] ?? 0 }))
+    .sort((a, b) => b.gain - a.gain);
+  const nobody = rows.every((r) => r.p.id === room.drawerId || r.gain === 0);
+  return (
+    <>
+      {nobody && <p className="muted">Nobody found it this time.</p>}
+      <ul className="gains">
+        {rows.map(({ p, gain }) => (
+          <li key={p.id} data-gained={gain > 0}>
+            <Avatar {...p.avatar} size={28} />
+            <span>
+              {p.name}
+              {p.id === room.drawerId && <em className="tag">drew it</em>}
+            </span>
+            <b>+{gain}</b>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** The top three on blocks (first in the middle), with everyone else listed below. */
+function Podium({
+  ranked,
+  myId,
+}: {
+  ranked: { player: PlayerInfo; place: number }[];
+  myId: string;
+}) {
+  const top = ranked.filter((r) => r.place <= 3);
+  const rest = ranked.filter((r) => r.place > 3);
+  // Middle block is the winner(s); silver sits to its left and bronze to its right.
+  const order = [...top].sort((a, b) => a.place - b.place);
+  const arranged =
+    order.length >= 3 && order[0]!.place === 1 && order[1]!.place !== 1
+      ? [order[1]!, order[0]!, ...order.slice(2)]
+      : order;
+  return (
+    <>
+      <ol className="podium" aria-label="Final standings">
+        {arranged.map(({ player: p, place }) => (
+          <li key={p.id} data-place={place} data-testid={`podium-${p.name}`}>
+            <Avatar {...p.avatar} size={place === 1 ? 56 : 44} />
+            <span className="player-name">
+              {p.name}
+              {p.id === myId && <em className="tag">you</em>}
+            </span>
+            <b>{p.score}</b>
+            <span className="block" aria-hidden="true">
+              {place}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {rest.length > 0 && (
+        <ol className="runners" start={4}>
+          {rest.map(({ player: p, place }) => (
+            <li key={p.id}>
+              <span className="place">#{place}</span>
+              <span className="player-name">{p.name}</span>
+              <b>{p.score}</b>
+            </li>
+          ))}
+        </ol>
+      )}
+    </>
   );
 }

@@ -23,6 +23,7 @@ import {
   defaultSettings,
   normalizeCode,
   parseCanvasEvent,
+  rankPlayers,
   type ActionResult,
   type CanvasEvent,
   type ChatMessage,
@@ -215,12 +216,13 @@ export class RoomManager {
     return { ok: true };
   }
 
-  /** Host starts the game: round one, first drawer. */
+  /** Host starts the game (from the lobby, or straight from the final standings): round one. */
   start(socketId: string): ActionResult {
     const found = this.hostRoom(socketId);
     if (!found.ok) return found;
     const { room } = found;
-    if (room.phase !== 'lobby') return { ok: false, error: 'wrong-phase' };
+    if (room.phase !== 'lobby' && room.phase !== 'ended')
+      return { ok: false, error: 'wrong-phase' };
     if (room.seats.length < 2) return { ok: false, error: 'need-players' };
     this.resetGame(room);
     this.say(room, { kind: 'system', text: 'The game has started. Good luck!' });
@@ -523,9 +525,17 @@ export class RoomManager {
     room.choices = null;
     room.reveal = null;
     room.phaseEndsAt = null;
-    const top = [...room.seats].sort((a, b) => b.score - a.score)[0];
-    if (top)
-      this.say(room, { kind: 'system', text: `Game over! ${top.name} wins with ${top.score}.` });
+    const winners = rankPlayers(room.seats.map((s) => ({ name: s.name, score: s.score })))
+      .filter((r) => r.place === 1)
+      .map((r) => r.player);
+    if (winners.length) {
+      const names = winners.map((w) => w.name).join(' and ');
+      const verdict = winners.length > 1 ? `${names} tie` : `${names} wins`;
+      this.say(room, {
+        kind: 'system',
+        text: `Game over! ${verdict} with ${winners[0]!.score}.`,
+      });
+    }
     this.changed(room);
   }
 
