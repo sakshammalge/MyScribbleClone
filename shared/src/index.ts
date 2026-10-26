@@ -1,4 +1,5 @@
 export * from './canvas.ts';
+export * from './profanity.ts';
 import type { CanvasEvent, DrawOp } from './canvas.ts';
 
 export const APP_NAME = 'Inkling';
@@ -113,6 +114,7 @@ export interface Profile {
 
 export type RoomError =
   | 'invalid-name'
+  | 'name-not-allowed'
   | 'name-taken'
   | 'room-not-found'
   | 'room-full'
@@ -123,7 +125,10 @@ export type RoomError =
   | 'bad-choice'
   | 'kicked'
   | 'rate-limited'
-  | 'bad-target';
+  | 'bad-target'
+  | 'too-many-rooms'
+  | 'server-full'
+  | 'bad-request';
 
 export type JoinResult =
   { ok: true; playerId: string; token: string; room: RoomState } | { ok: false; error: RoomError };

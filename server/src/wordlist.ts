@@ -2349,7 +2349,6 @@ export const WORD_BANK: readonly string[] = [
   'puree',
   'purse',
   'puss',
-  'pussy',
   'puzzle',
   'pyramid',
   'python',

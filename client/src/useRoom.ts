@@ -13,6 +13,7 @@ import { socket } from './socket';
 
 export const ERROR_TEXT: Record<RoomError, string> = {
   'invalid-name': 'Pick a name between 1 and 20 characters.',
+  'name-not-allowed': 'Please pick a friendlier name.',
   'name-taken': 'Someone in that room already has this name. Try another.',
   'room-not-found': 'That room does not exist (or everyone already left).',
   'room-full': 'That room is full.',
@@ -24,6 +25,10 @@ export const ERROR_TEXT: Record<RoomError, string> = {
   kicked: 'The host removed you from that room.',
   'rate-limited': 'Slow down a little.',
   'bad-target': 'That player is not in the room.',
+  'too-many-rooms':
+    'Too many rooms were started from your network. Join one instead, or try later.',
+  'server-full': 'The server is full right now. Try again in a few minutes.',
+  'bad-request': 'Something went wrong. Try again.',
 };
 
 const NO_SECRETS: PrivateState = { choices: null, word: null };

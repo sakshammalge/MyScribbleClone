@@ -1,4 +1,5 @@
 import { randomBytes, randomInt, randomUUID } from 'node:crypto';
+import { PerIpCounter } from './abuse';
 import { Board } from './canvas';
 import {
   cleanWords,
@@ -19,8 +20,11 @@ import {
   CHAT_MAX_LENGTH,
   SETTINGS_LIMITS,
   TURN_TIMING,
+  badName,
   cleanName,
   defaultSettings,
+  hasProfanity,
+  maskProfanity,
   normalizeCode,
   parseCanvasEvent,
   rankPlayers,
@@ -46,6 +50,8 @@ interface Seat {
   socketId: string | null;
   dropTimer: ReturnType<typeof setTimeout> | null;
   score: number;
+  /** Address the seat last connected from, for binding kicks to more than a name. */
+  ip: string | null;
 }
 
 /** Where the server sends things that are not part of the shared room snapshot. */
@@ -54,6 +60,10 @@ export interface RoomHooks {
   private?: (socketId: string, state: PrivateState) => void;
   /** Multiplies the word-choice and reveal pauses; the draw time is always as configured. */
   timeScale?: number;
+  /** Open rooms one address may have started at once. */
+  roomsPerIp?: number;
+  /** Open rooms across the whole server. */
+  maxRooms?: number;
 }
 
 interface Logged {
@@ -89,8 +99,10 @@ interface Room {
   used: Set<string>;
   chat: Logged[];
   chatSeq: number;
-  /** Lower-cased names of kicked players, who may not take a seat again. */
-  banned: Set<string>;
+  /** The address that started the room, so its slot is returned when the room closes. */
+  ownerIp: string | null;
+  /** What a kicked player may not come back with: a name alone is too easy to change. */
+  banned: { names: Set<string>; tokens: Set<string>; ips: Set<string> };
 }
 
 const CHAT_LOG_SIZE = 100;
@@ -115,17 +127,33 @@ export class RoomManager {
   private rooms = new Map<string, Room>();
   /** socketId -> seat location, so a disconnect can find its room. */
   private bySocket = new Map<string, { code: string; playerId: string }>();
+  /** socketId -> network address, for the sockets the transport has told us about. */
+  private ips = new Map<string, string>();
+  private roomsByIp: PerIpCounter;
 
   constructor(
     private onChange: (room: RoomState | null, code: string) => void,
     private graceMs = RECONNECT_GRACE_MS,
     private hooks: RoomHooks = {},
-  ) {}
+  ) {
+    this.roomsByIp = new PerIpCounter(hooks.roomsPerIp ?? Infinity);
+  }
+
+  /** Remembers where a socket connected from; kicks and room limits are tied to it. */
+  attach(socketId: string, ip: string): void {
+    this.ips.set(socketId, ip);
+  }
 
   create(socketId: string, profile: Profile): Joined | Failed {
     this.leave(socketId);
     const name = cleanName(profile?.name);
     if (!name) return { ok: false, error: 'invalid-name' };
+    if (badName(name)) return { ok: false, error: 'name-not-allowed' };
+    if (this.rooms.size >= (this.hooks.maxRooms ?? Infinity)) {
+      return { ok: false, error: 'server-full' };
+    }
+    const ip = this.ips.get(socketId);
+    if (ip && !this.roomsByIp.acquire(ip)) return { ok: false, error: 'too-many-rooms' };
     const room: Room = {
       code: this.freshCode(),
       hostId: '',
@@ -151,7 +179,8 @@ export class RoomManager {
       used: new Set(),
       chat: [],
       chatSeq: 0,
-      banned: new Set(),
+      ownerIp: this.ips.get(socketId) ?? null,
+      banned: { names: new Set(), tokens: new Set(), ips: new Set() },
     };
     this.rooms.set(room.code, room);
     const seat = this.seat(room, socketId, name, profile.avatar);
@@ -163,6 +192,13 @@ export class RoomManager {
   join(socketId: string, rawCode: string, profile: Profile, token?: string): Joined | Failed {
     const room = this.rooms.get(normalizeCode(String(rawCode ?? '')));
     if (!room) return { ok: false, error: 'room-not-found' };
+    const ip = this.ips.get(socketId);
+    if (
+      (ip && room.banned.ips.has(ip)) ||
+      (typeof token === 'string' && room.banned.tokens.has(token))
+    ) {
+      return { ok: false, error: 'kicked' };
+    }
 
     const existing = token ? room.seats.find((s) => s.token === token) : undefined;
     if (existing) {
@@ -172,7 +208,9 @@ export class RoomManager {
       if (existing.dropTimer) clearTimeout(existing.dropTimer);
       existing.dropTimer = null;
       existing.socketId = socketId;
+      existing.ip = ip ?? existing.ip;
       this.bySocket.set(socketId, { code: room.code, playerId: existing.id });
+      this.ensureHost(room);
       this.changed(room);
       return { ok: true, room: this.snapshot(room), playerId: existing.id, token: existing.token };
     }
@@ -180,12 +218,14 @@ export class RoomManager {
     this.leave(socketId);
     const name = cleanName(profile?.name);
     if (!name) return { ok: false, error: 'invalid-name' };
-    if (room.banned.has(name.toLowerCase())) return { ok: false, error: 'kicked' };
+    if (badName(name)) return { ok: false, error: 'name-not-allowed' };
+    if (room.banned.names.has(name.toLowerCase())) return { ok: false, error: 'kicked' };
     if (room.seats.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
       return { ok: false, error: 'name-taken' };
     }
     if (room.seats.length >= room.settings.maxPlayers) return { ok: false, error: 'room-full' };
     const seat = this.seat(room, socketId, name, profile.avatar);
+    this.ensureHost(room);
     this.changed(room);
     return { ok: true, room: this.snapshot(room), playerId: seat.id, token: seat.token };
   }
@@ -214,7 +254,7 @@ export class RoomManager {
     if (!found.ok) return found;
     const { room } = found;
     if (room.phase !== 'lobby') return { ok: false, error: 'wrong-phase' };
-    room.customWords = cleanWords(req?.words);
+    room.customWords = cleanWords(req?.words).filter((w) => !hasProfanity(w));
     room.customOnly = Boolean(req?.only) && room.customWords.length > 0;
     this.changed(room);
     return { ok: true };
@@ -270,7 +310,9 @@ export class RoomManager {
     const text = typeof raw === 'string' ? raw.replace(/\s+/g, ' ').trim() : '';
     if (!text) return { ok: true };
     const line = text.slice(0, CHAT_MAX_LENGTH);
-    const base = { name: seat.name, playerId: seat.id, text: line };
+    // Guesses are judged on what was typed; only what other people read is masked.
+    const shown = maskProfanity(line);
+    const base = { name: seat.name, playerId: seat.id, text: shown };
 
     if (room.phase !== 'drawing' || !room.word) {
       this.say(room, { kind: 'say', ...base });
@@ -299,7 +341,7 @@ export class RoomManager {
     }
     this.say(room, { kind: 'say', ...base });
     if (isClose(line, room.word)) {
-      this.say(room, { kind: 'close', text: `"${line}" is so close!` }, [seat]);
+      this.say(room, { kind: 'close', text: `"${shown}" is so close!` }, [seat]);
     }
     return { ok: true };
   }
@@ -356,7 +398,9 @@ export class RoomManager {
     if (!target || target.id === host.playerId) return { ok: false, error: 'bad-target' };
     const kickedSocket = target.socketId;
     if (kickedSocket) this.bySocket.delete(kickedSocket);
-    host.room.banned.add(target.name.toLowerCase());
+    host.room.banned.names.add(target.name.toLowerCase());
+    host.room.banned.tokens.add(target.token);
+    if (target.ip) host.room.banned.ips.add(target.ip);
     this.removeSeat(host.room.code, target.id);
     return { ok: true, socketId: kickedSocket };
   }
@@ -371,6 +415,7 @@ export class RoomManager {
 
   /** Unexpected drop: keep the seat for a grace period so a refresh can reclaim it. */
   disconnect(socketId: string): void {
+    this.ips.delete(socketId);
     const where = this.bySocket.get(socketId);
     const room = where && this.rooms.get(where.code);
     const seat = room?.seats.find((s) => s.id === where?.playerId);
@@ -379,7 +424,9 @@ export class RoomManager {
     seat.socketId = null;
     seat.dropTimer = setTimeout(() => this.removeSeat(room.code, seat.id), this.graceMs);
     seat.dropTimer.unref?.();
-    // A dropped connection is often just a refresh, so the turn waits for the grace period.
+    // A dropped connection is often just a refresh, so the turn waits for the grace period, but
+    // the room should not sit without a host who can act.
+    this.ensureHost(room);
     this.changed(room);
   }
 
@@ -399,6 +446,14 @@ export class RoomManager {
     return { ok: true, room, playerId: where.playerId };
   }
 
+  /** Hands the host role to a connected player when the current host has dropped. */
+  private ensureHost(room: Room): void {
+    const host = room.seats.find((s) => s.id === room.hostId);
+    if (host?.socketId) return;
+    const next = room.seats.find((s) => s.socketId);
+    if (next) room.hostId = next.id;
+  }
+
   private removeSeat(code: string, playerId: string): void {
     const room = this.rooms.get(code);
     if (!room) return;
@@ -407,12 +462,15 @@ export class RoomManager {
     room.seats = room.seats.filter((s) => s.id !== playerId);
     if (room.seats.length === 0) {
       this.rooms.delete(code);
+      if (room.ownerIp) this.roomsByIp.release(room.ownerIp);
       this.onChange(null, code);
       return;
     }
     if (room.hostId === playerId) {
       // Prefer a connected player as the new host.
       room.hostId = (room.seats.find((s) => s.socketId) ?? room.seats[0]!).id;
+    } else {
+      this.ensureHost(room);
     }
     room.queue = room.queue.filter((id) => id !== playerId);
     room.guessed.delete(playerId);
@@ -611,6 +669,7 @@ export class RoomManager {
       socketId,
       dropTimer: null,
       score: 0,
+      ip: this.ips.get(socketId) ?? null,
     };
     room.seats.push(seat);
     // Someone arriving mid-round gets a turn at the end of it.
