@@ -219,7 +219,7 @@ test('the studio fits a phone-sized screen', async ({ browser }) => {
     page.evaluate(
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
-  expect(await overflow()).toBe(false);
+  await expect.poll(overflow).toBe(false);
   // The drawer's toolbar fits the narrow screen too.
   await expect(host.page.getByRole('toolbar')).toBeVisible();
   await Promise.all([host.context.close(), phone.close()]);

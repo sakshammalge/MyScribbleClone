@@ -320,13 +320,13 @@ test('the game screen fits a phone for the picker and the guessers', async ({ br
       () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
     );
   await expect(bo.page.getByTestId('choosing')).toBeVisible();
-  expect(await overflow()).toBe(false);
+  await expect.poll(overflow).toBe(false);
   await pick(host);
   await expect(bo.page.getByTestId('hint')).toBeVisible();
-  expect(await overflow()).toBe(false);
+  await expect.poll(overflow).toBe(false);
   await guess(bo, 'a guess on a small screen');
   await expect(bo.page.getByTestId('chat-log')).toContainText('a guess on a small screen');
-  expect(await overflow()).toBe(false);
+  await expect.poll(overflow).toBe(false);
   await closeAll([host, bo]);
 });
 
