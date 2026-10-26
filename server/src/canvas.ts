@@ -1,8 +1,12 @@
 import { STROKE_LIMITS, type CanvasEvent, type DrawOp } from '@inkling/shared';
 
+const cost = (op: DrawOp) => (op.t === 'stroke' ? op.points.length / 2 : 1);
+
 /** The server's copy of one drawing: the ordered operations that late joiners replay. */
 export class Board {
   private ops: DrawOp[] = [];
+  /** Points held across every operation (a fill counts as one), capped by STROKE_LIMITS.totalPoints. */
+  private used = 0;
 
   /**
    * Applies an already-parsed event. Returns the event to relay to viewers, or null when it
@@ -12,27 +16,42 @@ export class Board {
     switch (event.t) {
       case 'clear':
         if (this.ops.length === 0) return null;
-        this.ops = [];
+        this.clear();
         return event;
-      case 'undo':
-        return this.ops.pop() ? event : null;
+      case 'undo': {
+        const popped = this.ops.pop();
+        if (popped) this.used -= cost(popped);
+        return popped ? event : null;
+      }
       case 'fill':
-        if (this.ops.length >= STROKE_LIMITS.maxOps) return null;
+        if (this.ops.length >= STROKE_LIMITS.maxOps || this.used >= STROKE_LIMITS.totalPoints) {
+          return null;
+        }
         this.ops.push({ ...event });
+        this.used += 1;
         return event;
       case 'stroke': {
         const last = this.ops[this.ops.length - 1];
         if (last?.t === 'stroke' && last.id === event.id) {
           // Same pen-down: append the chunk to the stroke we already hold.
-          const room = STROKE_LIMITS.strokePoints * 2 - last.points.length;
+          const room = Math.min(
+            STROKE_LIMITS.strokePoints * 2 - last.points.length,
+            (STROKE_LIMITS.totalPoints - this.used) * 2,
+          );
           if (room <= 0) return null;
-          const points = event.points.slice(0, room);
+          // Keep whole x,y pairs when a limit cuts the chunk short.
+          const points = event.points.slice(0, room - (room % 2));
+          if (points.length === 0) return null;
           last.points.push(...points);
+          this.used += points.length / 2;
           return { ...event, points };
         }
-        if (this.ops.length >= STROKE_LIMITS.maxOps) return null;
-        this.ops.push({ ...event, points: [...event.points] });
-        return event;
+        const left = STROKE_LIMITS.totalPoints - this.used;
+        if (this.ops.length >= STROKE_LIMITS.maxOps || left <= 0) return null;
+        const points = event.points.slice(0, left * 2);
+        this.ops.push({ ...event, points: [...points] });
+        this.used += points.length / 2;
+        return points.length === event.points.length ? event : { ...event, points };
       }
     }
   }
@@ -45,5 +64,6 @@ export class Board {
 
   clear(): void {
     this.ops = [];
+    this.used = 0;
   }
 }

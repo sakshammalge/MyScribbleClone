@@ -30,6 +30,9 @@ export function socketLimits() {
     chat: new RateLimit(5, 2),
     // Drawing batches go out roughly every 30 ms, so this allows a fast scribble but not a flood.
     canvas: new RateLimit(120, 60),
+    // Asking for the whole drawing or secrets again: a few on mount or reconnect, never a loop.
+    sync: new RateLimit(5, 0.5),
+    ping: new RateLimit(10, 2),
     // Everything else (join, settings, start, kick...): real clicks, never a loop.
     actions: new RateLimit(10, 3),
   };

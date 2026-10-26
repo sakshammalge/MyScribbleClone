@@ -1,4 +1,5 @@
 import { DEFAULT_PORT } from '@inkling/shared';
+import { parseTrustProxy } from './abuse';
 import { clientBuilt, createInklingServer } from './app';
 import { lanAddresses } from './lan';
 
@@ -10,7 +11,22 @@ const timeScale = Number(process.env.INKLING_TIME_SCALE) || undefined;
 const lanMode = process.env.INKLING_LAN
   ? process.env.INKLING_LAN !== '0'
   : process.env.NODE_ENV !== 'production';
-const { http, io } = createInklingServer({ timeScale });
+// Public hosting: INKLING_TRUST_PROXY=1 when one reverse proxy (Render, nginx...) is in front, so
+// limits and kicks see the visitor's address rather than the proxy's. Leave unset when exposed
+// directly, because the forwarding header can then be forged. The other knobs tune per-address caps.
+const positive = (v: string | undefined) => (Number(v) > 0 ? Number(v) : undefined);
+const { http, io } = createInklingServer({
+  timeScale,
+  trustProxy: parseTrustProxy(process.env.INKLING_TRUST_PROXY),
+  maxConnectionsPerIp: positive(process.env.INKLING_MAX_CONNECTIONS_PER_IP),
+  maxRoomsPerIp: positive(process.env.INKLING_MAX_ROOMS_PER_IP),
+  maxRooms: positive(process.env.INKLING_MAX_ROOMS),
+});
+
+// Last line of defence: handlers already catch their own errors, but a bug must cost one request,
+// not every game in progress.
+process.on('uncaughtException', (err) => console.error('Uncaught exception:', err));
+process.on('unhandledRejection', (err) => console.error('Unhandled rejection:', err));
 
 http.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {

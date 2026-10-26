@@ -67,7 +67,7 @@ What the host must provide:
 - **One instance only.** Rooms and games live in that process's memory. A second instance would not see the first's rooms, so do not scale out or enable autoscaling.
 - **WebSockets.** The game runs over Socket.IO. Pick a host that keeps long-lived connections open (Fly.io, Render, Railway or any container host). Serverless platforms such as Vercel or Netlify functions cannot hold them and will not work.
 - **HTTPS in front.** Hosts terminate TLS for you; no app config is needed because sockets use the page's own origin.
-- **Proxy awareness.** Behind a host's proxy every visitor looks like the same IP unless you set `INKLING_TRUST_PROXY=1` (or the number of proxy hops), so the per-IP limits would be shared by everyone. The limits themselves are tunable by environment variables; see the hardening notes once they land.
+- **Proxy awareness.** Behind a host's proxy every visitor looks like the same IP unless you set `INKLING_TRUST_PROXY=1` (or the number of proxy hops), so the per-IP limits would be shared by everyone. The caps are tunable with `INKLING_MAX_CONNECTIONS_PER_IP`, `INKLING_MAX_ROOMS_PER_IP` and `INKLING_MAX_ROOMS`.
 - **No sleeping.** An instance that scales to zero loses every room. Keep it always on.
 
 Every deploy or restart wipes live games. Players who were mid-game see "The server restarted and the room is gone" and can create a new room. Deploy when nobody is playing.

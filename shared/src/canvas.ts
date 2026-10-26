@@ -39,6 +39,8 @@ export const STROKE_LIMITS = {
   strokePoints: 6000,
   /** Operations kept per drawing; further ones are refused until undo or clear. */
   maxOps: 1500,
+  /** Points kept across the whole drawing (a fill counts as one); bounds memory and rejoin traffic. */
+  totalPoints: 30_000,
 } as const;
 
 export type Tool = 'brush' | 'eraser';
