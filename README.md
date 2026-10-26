@@ -2,6 +2,14 @@
 
 A multiplayer draw-and-guess game for private rooms. Same classic game idea, its own look and feel.
 
+**Live:** https://inkling-5wrz.onrender.com (free plan, so the first visit after idle can take about a minute to wake up).
+
+## Status
+
+Milestones M1 to M6 are done: room lobby, live drawing studio, game loop with rotating drawer and word choice, guessing and scoring with podium and rematch, and solid LAN play with host kick and rate limits. Pre-deploy hardening (guarded handlers, abuse caps, profanity filter, security headers, phone layout) and cloud packaging (Dockerfile, SIGTERM shutdown, hosted-mode banner) are done, and the game is deployed on Render.
+
+Next: a round of feedback on the live build. Likely areas are polish, a paid always-on instance so rooms survive idle periods, and custom domain.
+
 ## Layout
 
 - `shared/` event types and game constants used by both sides
@@ -68,7 +76,17 @@ What the host must provide:
 - **WebSockets.** The game runs over Socket.IO. Pick a host that keeps long-lived connections open (Fly.io, Render, Railway or any container host). Serverless platforms such as Vercel or Netlify functions cannot hold them and will not work.
 - **HTTPS in front.** Hosts terminate TLS for you; no app config is needed because sockets use the page's own origin.
 - **Proxy awareness.** Behind a host's proxy every visitor looks like the same IP unless you set `INKLING_TRUST_PROXY=1` (or the number of proxy hops), so the per-IP limits would be shared by everyone. The caps are tunable with `INKLING_MAX_CONNECTIONS_PER_IP`, `INKLING_MAX_ROOMS_PER_IP` and `INKLING_MAX_ROOMS`.
-- **No sleeping.** An instance that scales to zero loses every room. Keep it always on.
+- **No sleeping.** An instance that scales to zero loses every room. Keep it always on (the free Render plan sleeps after about 15 minutes idle, which also ends every room).
+
+### Current deployment (Render)
+
+The live game runs as a Render Docker web service named `inkling`, built from this repo's `Dockerfile`:
+
+- Plan: free, region Singapore, one instance.
+- Health check: `/healthz`. Auto-deploy from `main` on every commit.
+- Environment: `NODE_ENV=production`, `INKLING_LAN=0`, `INKLING_TRUST_PROXY=1`.
+- The service was created through the Render API and is not linked to the `render.yaml` Blueprint, which documents the same settings for anyone recreating it. Editing `render.yaml` does not change the live service; change settings in the Render dashboard.
+- API keys and other secrets never go in the repo.
 
 Every deploy or restart wipes live games. Players who were mid-game see "The server restarted and the room is gone" and can create a new room. Deploy when nobody is playing.
 
