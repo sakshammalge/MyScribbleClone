@@ -53,3 +53,15 @@
   --color-bad: #ff7088;
   --shadow-card: 0 2px 0 var(--color-border), 0 10px 30px rgb(0 0 0 / 35%);
 }
+
+/* Avatar ink palette; identical in both themes so a player keeps their colour. */
+:root {
+  --avatar-0: #ff6b3d;
+  --avatar-1: #ffd23f;
+  --avatar-2: #3cc7b0;
+  --avatar-3: #6c8cff;
+  --avatar-4: #c779ff;
+  --avatar-5: #ff7aa8;
+  --avatar-6: #8bd45a;
+  --avatar-7: #f0a35c;
+}

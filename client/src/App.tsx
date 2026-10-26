@@ -1,28 +1,55 @@
-import { APP_NAME } from '@inkling/shared';
-import { Sketchpad } from './Sketchpad';
+import { useEffect, useState } from 'react';
+import { Home } from './Home';
+import { Lobby } from './Lobby';
+import { codeFromPath, invitePath, usePath } from './route';
+import { loadProfile } from './session';
 import { useConnection } from './useConnection';
+import { useRoom } from './useRoom';
 
 export function App() {
-  const { state, latencyMs } = useConnection();
+  const { state } = useConnection();
+  const { path, go } = usePath();
+  const [profile, setProfile] = useState(loadProfile);
+  const { room, myId, error, busy, create, join, leave, updateSettings, clearError } =
+    useRoom(profile);
+  const inviteCode = codeFromPath(path);
+  const roomCode = room?.code;
+
+  // The address bar always names the current room, so it can be shared as-is.
+  useEffect(() => {
+    if (roomCode) go(invitePath(roomCode));
+  }, [roomCode, go]);
+
+  const goHome = () => {
+    clearError();
+    go('/');
+  };
+
+  if (room && myId) {
+    return (
+      <Lobby
+        room={room}
+        myId={myId}
+        onLeave={() => {
+          leave();
+          goHome();
+        }}
+        onSettings={updateSettings}
+      />
+    );
+  }
 
   return (
-    <main className="shell">
-      <header className="brand">
-        <img src="/logo.svg" alt="" />
-        <div>
-          <h1>{APP_NAME}</h1>
-          <p>Draw it. Guess it. Heckle your friends.</p>
-        </div>
-      </header>
-
-      <section className="card" aria-live="polite">
-        <span className="status" data-state={state}>
-          Server: {state}
-          {latencyMs !== null && ` · ${latencyMs} ms`}
-        </span>
-        <p>Scaffold is live. Rooms and lobby arrive next; for now, doodle to test the canvas.</p>
-        <Sketchpad />
-      </section>
-    </main>
+    <Home
+      profile={profile}
+      onProfile={setProfile}
+      inviteCode={inviteCode}
+      busy={busy}
+      error={error}
+      connected={state === 'connected'}
+      onCreate={() => create({ ...profile, name: profile.name.trim() })}
+      onJoin={(code) => join(code, { ...profile, name: profile.name.trim() })}
+      onDeclineInvite={goHome}
+    />
   );
 }
