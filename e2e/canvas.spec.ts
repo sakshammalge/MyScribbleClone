@@ -19,7 +19,7 @@ async function joinRoom(page: Page, code: string, name: string) {
   await page.goto(`/r/${code}`);
   await page.getByLabel('Your name').fill(name);
   await page.getByRole('button', { name: `Join room ${code}` }).click();
-  await expect(page.getByRole('region', { name: 'Players' })).toContainText(name);
+  await expect(page.getByRole('listitem').filter({ hasText: name })).toBeVisible();
 }
 
 /** A host and a friend, both on the drawing board. */
@@ -124,7 +124,8 @@ test('colours, sizes, eraser, fill, undo and clear all sync', async ({ browser }
   await drag(h, [0.3, 0.9], [0.3, 0.5]);
   await h.getByRole('button', { name: 'Colour #3cc7b0' }).click();
   await h.getByRole('button', { name: 'Fill' }).click();
-  await h.getByTestId('drawing-canvas').click({ position: { x: 300, y: 500 } });
+  const box = (await canvas(h).boundingBox())!;
+  await canvas(h).click({ position: { x: box.width * 0.5, y: box.height * 0.7 } });
   const inside = () => pixel(guest.page, 0.5, 0.7);
   await expect.poll(inside).toEqual([60, 199, 176]);
   expect(await pixel(guest.page, 0.05, 0.7)).toEqual(WHITE);
