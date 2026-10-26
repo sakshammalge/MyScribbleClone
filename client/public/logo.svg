@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Inkling logo">
+  <rect width="64" height="64" rx="18" fill="#2a2557"/>
+  <path d="M32 9c7 10 13 17 13 25a13 13 0 0 1-26 0c0-8 6-15 13-25z" fill="#ff6b3d"/>
+  <path d="M32 24v22" stroke="#2a2557" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="32" cy="17" r="3" fill="#ffd23f"/>
+</svg>

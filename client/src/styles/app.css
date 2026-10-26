@@ -1,0 +1,99 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+
+.shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-3);
+  display: grid;
+  gap: var(--space-4);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.brand img {
+  width: 56px;
+  height: 56px;
+}
+
+.brand h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  letter-spacing: -0.02em;
+}
+
+.brand p {
+  margin: 0;
+  color: var(--color-ink-muted);
+}
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-card);
+  display: grid;
+  gap: var(--space-3);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.status::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-bad);
+}
+
+.status[data-state='connected']::before {
+  background: var(--color-good);
+}
+
+.btn {
+  justify-self: start;
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 10px 18px;
+  font: inherit;
+  font-weight: 700;
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  cursor: pointer;
+}
+
+.btn:focus-visible {
+  outline: 3px solid var(--color-highlight);
+  outline-offset: 2px;
+}
+
+.sketch {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  border: 2px dashed var(--color-border);
+  touch-action: none;
+  cursor: crosshair;
+}
