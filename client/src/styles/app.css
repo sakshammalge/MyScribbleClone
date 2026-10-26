@@ -1077,7 +1077,8 @@ body {
   }
 
   .studio-bar {
-    flex-wrap: nowrap;
+    /* Wraps instead of overflowing when a wider font or room code fills the line. */
+    flex-wrap: wrap;
     font-size: 0.85rem;
   }
 

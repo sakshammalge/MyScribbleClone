@@ -17,7 +17,7 @@ npm run dev      # server on :3001, Vite on :5173 (both listen on the LAN)
 
 ## Hosting on the office LAN
 
-One machine runs the game; everyone else opens its address in a browser. Nothing is hosted in the cloud.
+One machine runs the game; everyone else opens its address in a browser. For a hosted deployment instead, see Deploying to the cloud below.
 
 On the host machine (Node 22 or newer, Windows, macOS or Linux):
 
@@ -50,6 +50,27 @@ Tip: the host should open the game through the "Share this" address too, so the 
 6. **Port in use.** The server says so and exits; pick another with `PORT`.
 
 Players who drop (sleep, Wi-Fi blip) keep their seat for 30 seconds and rejoin by reloading the page.
+
+## Deploying to the cloud
+
+The repo ships a `Dockerfile` (Node 22) that builds the client and serves everything, API and sockets, from one process on `PORT` (default 3001):
+
+```sh
+docker build -t inkling .
+docker run --rm -p 3001:3001 inkling
+```
+
+The image sets `NODE_ENV=production`, so the server skips the LAN "Share this" banner and only reports its port. Locally, `npm start` with `NODE_ENV=production` (or `INKLING_LAN=0`) does the same. `/healthz` answers 200 for platform health checks, and the server shuts down cleanly on `SIGTERM`.
+
+What the host must provide:
+
+- **One instance only.** Rooms and games live in that process's memory. A second instance would not see the first's rooms, so do not scale out or enable autoscaling.
+- **WebSockets.** The game runs over Socket.IO. Pick a host that keeps long-lived connections open (Fly.io, Render, Railway or any container host). Serverless platforms such as Vercel or Netlify functions cannot hold them and will not work.
+- **HTTPS in front.** Hosts terminate TLS for you; no app config is needed because sockets use the page's own origin.
+- **Proxy awareness.** Behind a host's proxy every visitor looks like the same IP unless you set `INKLING_TRUST_PROXY=1` (or the number of proxy hops), so the per-IP limits would be shared by everyone. The caps are tunable with `INKLING_MAX_CONNECTIONS_PER_IP`, `INKLING_MAX_ROOMS_PER_IP` and `INKLING_MAX_ROOMS`.
+- **No sleeping.** An instance that scales to zero loses every room. Keep it always on.
+
+Every deploy or restart wipes live games. Players who were mid-game see "The server restarted and the room is gone" and can create a new room. Deploy when nobody is playing.
 
 ## Rooms
 
