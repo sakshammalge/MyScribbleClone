@@ -38,6 +38,11 @@ export function App() {
     if (roomCode) go(invitePath(roomCode));
   }, [roomCode, go]);
 
+  // A restarted server forgot the room, so its invite link in the address bar is dead too.
+  useEffect(() => {
+    if (error === 'room-lost') go('/');
+  }, [error, go]);
+
   const goHome = () => {
     clearError();
     go('/');

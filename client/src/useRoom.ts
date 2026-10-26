@@ -11,7 +11,12 @@ import type {
 import { loadSeat, saveProfile, saveSeat } from './session';
 import { socket } from './socket';
 
-export const ERROR_TEXT: Record<RoomError, string> = {
+/** Errors the client raises itself, beyond what the server reports. */
+export type ClientError = RoomError | 'room-lost';
+
+export const ERROR_TEXT: Record<ClientError, string> = {
+  'room-lost':
+    'The server restarted and the room is gone, so the game ended. Create a new room to play again.',
   'invalid-name': 'Pick a name between 1 and 20 characters.',
   'name-taken': 'Someone in that room already has this name. Try another.',
   'room-not-found': 'That room does not exist (or everyone already left).',
@@ -33,7 +38,7 @@ const CHAT_KEPT = 200;
 export function useRoom(profile: Profile) {
   const [room, setRoom] = useState<RoomState | null>(null);
   const [myId, setMyId] = useState<string | null>(null);
-  const [error, setError] = useState<RoomError | null>(null);
+  const [error, setError] = useState<ClientError | null>(null);
   const [busy, setBusy] = useState(false);
   const [secrets, setSecrets] = useState<PrivateState>(NO_SECRETS);
   const [chat, setChat] = useState<ChatMessage[]>([]);
@@ -67,7 +72,20 @@ export function useRoom(profile: Profile) {
       socket.emit(
         'room:join',
         { code: seat.code, profile: profileRef.current, token: seat.token },
-        adopt,
+        (result) => {
+          // Rooms live in server memory, so a missing room on reconnect means the server restarted.
+          if (!result.ok && result.error === 'room-not-found') {
+            saveSeat(null);
+            setRoom(null);
+            setMyId(null);
+            setSecrets(NO_SECRETS);
+            setChat([]);
+            setBusy(false);
+            setError('room-lost');
+            return;
+          }
+          adopt(result);
+        },
       );
     };
     const onSecrets = (state: PrivateState) => setSecrets(state);

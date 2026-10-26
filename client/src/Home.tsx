@@ -8,10 +8,9 @@ import {
   isValidCode,
   normalizeCode,
   type Profile,
-  type RoomError,
 } from '@inkling/shared';
 import { Avatar } from './Avatar';
-import { ERROR_TEXT } from './useRoom';
+import { ERROR_TEXT, type ClientError } from './useRoom';
 
 interface HomeProps {
   profile: Profile;
@@ -19,7 +18,7 @@ interface HomeProps {
   /** Code from an invite link, when the visitor arrived through one. */
   inviteCode: string | null;
   busy: boolean;
-  error: RoomError | null;
+  error: ClientError | null;
   connected: boolean;
   onCreate: () => void;
   onJoin: (code: string) => void;

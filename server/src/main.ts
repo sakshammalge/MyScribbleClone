@@ -5,7 +5,12 @@ import { lanAddresses } from './lan';
 const port = Number(process.env.PORT ?? DEFAULT_PORT);
 // INKLING_TIME_SCALE=0.1 shortens the pauses between turns (used by e2e tests).
 const timeScale = Number(process.env.INKLING_TIME_SCALE) || undefined;
-const { http } = createInklingServer({ timeScale });
+// LAN mode (the default) prints the addresses teammates can open. Hosted deploys run with
+// NODE_ENV=production, or INKLING_LAN=0, and only report the port.
+const lanMode = process.env.INKLING_LAN
+  ? process.env.INKLING_LAN !== '0'
+  : process.env.NODE_ENV !== 'production';
+const { http, io } = createInklingServer({ timeScale });
 
 http.on('error', (err: NodeJS.ErrnoException) => {
   if (err.code === 'EADDRINUSE') {
@@ -16,11 +21,15 @@ http.on('error', (err: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
-// Bind every interface so other machines on the LAN can reach us.
+// Bind every interface so other machines (or the container's port mapping) can reach us.
 http.listen(port, '0.0.0.0', () => {
-  const addresses = lanAddresses();
   console.log(`\nInkling is running.\n`);
   console.log(`  This machine:  http://localhost:${port}`);
+  if (!lanMode) {
+    console.log(`  Hosted mode:   listening on port ${port}; share your public URL.\n`);
+    return;
+  }
+  const addresses = lanAddresses();
   if (addresses.length === 0) {
     console.log('  Network:       no network connection found; teammates cannot join yet.');
   }
@@ -36,3 +45,16 @@ http.listen(port, '0.0.0.0', () => {
   }
   console.log('');
 });
+
+// Hosts stop containers with SIGTERM: close sockets and the listener, then exit.
+let stopping = false;
+function shutdown(signal: string) {
+  if (stopping) return;
+  stopping = true;
+  console.log(`${signal} received, shutting down.`);
+  // Rooms are in memory, so there is nothing to flush; force exit if connections linger.
+  setTimeout(() => process.exit(0), 5000).unref();
+  io.close(() => process.exit(0));
+}
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
