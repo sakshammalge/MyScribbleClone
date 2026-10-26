@@ -24,6 +24,10 @@ npm start        # prints http://<your-LAN-IP>:3001 for teammates to open
 
 If teammates cannot connect, check the firewall and that the Wi-Fi does not isolate clients.
 
+## Rooms
+
+Rooms are private: create one, then share the `/r/CODE` invite link (or the 5-character code). The lobby shows the roster live, the host edits rounds, draw time and max players, and the host role moves on if the host leaves. A refresh keeps your seat for 30 seconds.
+
 ## Checks
 
-`npm run lint`, `npm run typecheck`, `npm test`, `npm run format:check` (all run in CI).
+`npm run lint`, `npm run typecheck`, `npm test`, `npm run format:check`, and `npm run test:e2e` (Playwright, multi-browser room flows). All run in CI.

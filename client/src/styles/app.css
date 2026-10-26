@@ -11,7 +11,7 @@ body {
 }
 
 .shell {
-  max-width: 720px;
+  max-width: 760px;
   margin: 0 auto;
   padding: var(--space-5) var(--space-3);
   display: grid;
@@ -96,4 +96,355 @@ body {
   border: 2px dashed var(--color-border);
   touch-action: none;
   cursor: crosshair;
+}
+
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn.secondary {
+  background: var(--color-ink);
+  color: var(--color-bg);
+}
+
+.muted {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 0.9rem;
+}
+
+.error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--color-bad) 14%, transparent);
+  color: var(--color-bad);
+  font-weight: 600;
+}
+
+.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--color-ink-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.ghost {
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 1.4rem;
+  cursor: pointer;
+}
+
+.field {
+  display: grid;
+  gap: var(--space-1);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.field.grow {
+  flex: 1;
+}
+
+.field input {
+  font: inherit;
+  font-weight: 500;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 2px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+
+.field input:focus-visible {
+  outline: 3px solid var(--color-highlight);
+  border-color: var(--color-ink);
+}
+
+.code-input {
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+.home fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+  justify-items: center;
+}
+
+.home legend {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: var(--space-2);
+}
+
+.who .field {
+  width: 100%;
+}
+
+.who-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.swatches {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid var(--color-ink);
+  cursor: pointer;
+}
+
+.swatch[aria-checked='true'] {
+  outline: 3px solid var(--color-highlight);
+  outline-offset: 2px;
+  transform: scale(1.12);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.invite-banner {
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--color-highlight);
+  color: #1e1a42;
+  text-align: center;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-ink-muted);
+  font-size: 0.85rem;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-top: 2px dashed var(--color-border);
+}
+
+.join-row {
+  display: flex;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.lobby-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.lobby-head h1 {
+  margin: 0;
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+}
+
+/* The invite is a torn ticket: code on the left, link stub on the right. */
+.ticket {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  background: var(--color-surface);
+  border: 2px solid var(--color-ink);
+  border-radius: var(--radius-lg);
+  box-shadow: 6px 6px 0 var(--color-accent);
+  overflow: hidden;
+}
+
+.ticket-main,
+.ticket-stub {
+  padding: var(--space-4);
+  display: grid;
+  gap: var(--space-2);
+  align-content: center;
+}
+
+.ticket-stub {
+  border-left: 3px dashed var(--color-border);
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--color-ink-muted);
+  font-weight: 700;
+}
+
+.code-tiles {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.tile {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 60px;
+  border-radius: var(--radius-sm);
+  background: var(--color-ink);
+  color: var(--color-bg);
+  font-family: var(--font-display);
+  font-size: 1.9rem;
+  font-weight: 800;
+}
+
+.tile:nth-child(odd) {
+  transform: rotate(-3deg);
+}
+
+.tile:nth-child(even) {
+  transform: rotate(2deg) translateY(2px);
+}
+
+.link-box {
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--color-border);
+  background: var(--color-bg);
+  color: var(--color-ink);
+  min-width: 0;
+}
+
+.lobby-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.card h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+}
+
+.count {
+  color: var(--color-ink-muted);
+  font-weight: 500;
+  font-size: 0.9rem;
+}
+
+.roster {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.player {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  animation: pop 0.25s ease-out;
+}
+
+.player[data-connected='false'] {
+  opacity: 0.5;
+}
+
+.player-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 99px;
+  background: var(--color-border);
+  color: var(--color-ink);
+}
+
+.badge.host {
+  background: var(--color-highlight);
+  color: #1e1a42;
+}
+
+.badge.away {
+  background: transparent;
+  color: var(--color-ink-muted);
+}
+
+.setting {
+  display: grid;
+  gap: var(--space-1);
+  font-weight: 600;
+}
+
+.setting span {
+  display: flex;
+  justify-content: space-between;
+}
+
+.setting input[type='range'] {
+  accent-color: var(--color-accent);
+}
+
+@keyframes pop {
+  from {
+    transform: scale(0.9);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player {
+    animation: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .ticket,
+  .lobby-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ticket-stub {
+    border-left: 0;
+    border-top: 3px dashed var(--color-border);
+  }
+
+  .tile {
+    width: 42px;
+    height: 54px;
+  }
 }
