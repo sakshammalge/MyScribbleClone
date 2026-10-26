@@ -98,7 +98,9 @@ describe('game loop', () => {
 
     // Nothing Bo said reaches Cy; the announcement does, without the word.
     expect(heard['s-Cy']!.map((m) => m.kind)).toContain('correct');
-    expect(heard['s-Cy']!.some((m) => m.text.toLowerCase().includes(word))).toBe(false);
+    // (System lines are fixed text, which a short random word can happen to sit inside.)
+    const talk = heard['s-Cy']!.filter((m) => m.kind !== 'system');
+    expect(talk.some((m) => m.text.toLowerCase().includes(word))).toBe(false);
 
     rooms.chat('s-Cy', word);
     expect(state.phase).toBe('reveal');
