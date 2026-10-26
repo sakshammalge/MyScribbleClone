@@ -21,6 +21,9 @@ export const ERROR_TEXT: Record<RoomError, string> = {
   'need-players': 'You need at least two players to start.',
   'wrong-phase': 'That is not possible right now.',
   'bad-choice': 'That word is not on offer.',
+  kicked: 'The host removed you from that room.',
+  'rate-limited': 'Slow down a little.',
+  'bad-target': 'That player is not in the room.',
 };
 
 const NO_SECRETS: PrivateState = { choices: null, word: null };
@@ -73,11 +76,20 @@ export function useRoom(profile: Profile) {
         log.some((m) => m.id === line.id) ? log : [...log, line].slice(-CHAT_KEPT),
       );
     const onHistory = (log: ChatMessage[]) => setChat(log);
+    const onKicked = () => {
+      saveSeat(null);
+      setRoom(null);
+      setMyId(null);
+      setSecrets(NO_SECRETS);
+      setChat([]);
+      setError('kicked');
+    };
     socket.on('room:state', onState);
     socket.on('connect', onConnect);
     socket.on('game:private', onSecrets);
     socket.on('chat:message', onLine);
     socket.on('chat:history', onHistory);
+    socket.on('room:kicked', onKicked);
     if (socket.connected) onConnect();
     return () => {
       socket.off('room:state', onState);
@@ -85,6 +97,7 @@ export function useRoom(profile: Profile) {
       socket.off('game:private', onSecrets);
       socket.off('chat:message', onLine);
       socket.off('chat:history', onHistory);
+      socket.off('room:kicked', onKicked);
     };
   }, [adopt]);
 
@@ -134,6 +147,12 @@ export function useRoom(profile: Profile) {
     });
   }, []);
 
+  const kick = useCallback((playerId: string) => {
+    socket.emit('room:kick', playerId, (res) => {
+      if (!res.ok) setError(res.error);
+    });
+  }, []);
+
   const chooseWord = useCallback((index: number) => {
     socket.emit('word:choose', index, (res) => {
       if (!res.ok) setError(res.error);
@@ -163,6 +182,7 @@ export function useRoom(profile: Profile) {
     updateSettings,
     startGame,
     backToLobby,
+    kick,
     chooseWord,
     sendChat,
     setWords,

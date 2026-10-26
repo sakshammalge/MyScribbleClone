@@ -89,6 +89,8 @@ interface Room {
   used: Set<string>;
   chat: Logged[];
   chatSeq: number;
+  /** Lower-cased names of kicked players, who may not take a seat again. */
+  banned: Set<string>;
 }
 
 const CHAT_LOG_SIZE = 100;
@@ -149,6 +151,7 @@ export class RoomManager {
       used: new Set(),
       chat: [],
       chatSeq: 0,
+      banned: new Set(),
     };
     this.rooms.set(room.code, room);
     const seat = this.seat(room, socketId, name, profile.avatar);
@@ -177,6 +180,7 @@ export class RoomManager {
     this.leave(socketId);
     const name = cleanName(profile?.name);
     if (!name) return { ok: false, error: 'invalid-name' };
+    if (room.banned.has(name.toLowerCase())) return { ok: false, error: 'kicked' };
     if (room.seats.some((s) => s.name.toLowerCase() === name.toLowerCase())) {
       return { ok: false, error: 'name-taken' };
     }
@@ -339,6 +343,22 @@ export class RoomManager {
     return room && (room.phase === 'drawing' || room.phase === 'reveal')
       ? room.board.snapshot()
       : [];
+  }
+
+  /**
+   * Host only: take another player's seat away and bar their name from the room. Returns the
+   * kicked player's socket so the transport can tell them and pull them out of the broadcast room.
+   */
+  kick(socketId: string, targetId: unknown): { ok: true; socketId: string | null } | Failed {
+    const host = this.hostRoom(socketId);
+    if (!host.ok) return host;
+    const target = host.room.seats.find((s) => s.id === targetId);
+    if (!target || target.id === host.playerId) return { ok: false, error: 'bad-target' };
+    const kickedSocket = target.socketId;
+    if (kickedSocket) this.bySocket.delete(kickedSocket);
+    host.room.banned.add(target.name.toLowerCase());
+    this.removeSeat(host.room.code, target.id);
+    return { ok: true, socketId: kickedSocket };
   }
 
   /** Voluntary exit: the seat is freed immediately. */

@@ -15,6 +15,7 @@ interface LobbyProps {
   room: RoomState;
   myId: string;
   onLeave: () => void;
+  onKick: (playerId: string) => void;
   chat: ChatMessage[];
   onSettings: (patch: Partial<RoomSettings>) => void;
   onWords: (words: string[], only: boolean) => void;
@@ -33,6 +34,7 @@ export function Lobby({
   myId,
   chat,
   onLeave,
+  onKick,
   onSettings,
   onWords,
   onChat,
@@ -110,6 +112,16 @@ export function Lobby({
                 {p.id === myId && <span className="badge">you</span>}
                 {p.isHost && <span className="badge host">host</span>}
                 {!p.connected && <span className="badge away">reconnecting…</span>}
+                {isHost && p.id !== myId && (
+                  <button
+                    type="button"
+                    className="kick"
+                    aria-label={`Remove ${p.name}`}
+                    onClick={() => onKick(p.id)}
+                  >
+                    Remove
+                  </button>
+                )}
               </li>
             ))}
           </ul>

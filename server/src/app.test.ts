@@ -48,6 +48,48 @@ describe('inkling server', () => {
   });
 });
 
+describe('abuse limits and kicking over sockets', () => {
+  const profile = (name: string) => ({ name, avatar: { color: 1, face: 1 } });
+
+  it('refuses a flood of room actions with rate-limited', async () => {
+    const server = createInklingServer();
+    await new Promise<void>((done) => server.http.listen(0, '127.0.0.1', done));
+    const url = `http://127.0.0.1:${(server.http.address() as AddressInfo).port}`;
+    const a = connect(url);
+    const results = await Promise.all(
+      Array.from(
+        { length: 30 },
+        () => new Promise<JoinResult>((r) => a.emit('room:create', profile('Ada'), r)),
+      ),
+    );
+    expect(results.some((r) => !r.ok && r.error === 'rate-limited')).toBe(true);
+    expect(results.some((r) => r.ok)).toBe(true);
+    a.close();
+    await server.io.close();
+  });
+
+  it('tells a kicked player and removes them from the room', async () => {
+    const server = createInklingServer();
+    await new Promise<void>((done) => server.http.listen(0, '127.0.0.1', done));
+    const url = `http://127.0.0.1:${(server.http.address() as AddressInfo).port}`;
+    const a = connect(url);
+    const b = connect(url);
+    const created = await new Promise<JoinResult>((r) => a.emit('room:create', profile('Ada'), r));
+    if (!created.ok) throw new Error(created.error);
+    const joined = await new Promise<JoinResult>((r) =>
+      b.emit('room:join', { code: created.room.code, profile: profile('Bo') }, r),
+    );
+    if (!joined.ok) throw new Error(joined.error);
+    const kicked = new Promise<void>((r) => b.on('room:kicked', r));
+    const ack = await new Promise((r) => a.emit('room:kick', joined.playerId, r));
+    expect(ack).toEqual({ ok: true });
+    await kicked;
+    a.close();
+    b.close();
+    await server.io.close();
+  });
+});
+
 describe('room events over sockets', () => {
   it('broadcasts roster changes to everyone in the room', async () => {
     const server = createInklingServer();
