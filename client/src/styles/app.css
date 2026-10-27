@@ -442,7 +442,7 @@ body {
 
 /* Studio: slim player rail, one big sheet of paper, a pencil case underneath. */
 .studio {
-  max-width: 1400px;
+  max-width: 2200px;
   margin: 0 auto;
   padding: var(--space-3);
   display: grid;
