@@ -28,6 +28,8 @@ export function socketLimits() {
   return {
     // Chat: a short burst, then about two lines a second.
     chat: new RateLimit(5, 2),
+    // Reactions: a quick flurry of taps, then about one a second.
+    emote: new RateLimit(4, 1),
     // Drawing batches go out roughly every 30 ms, so this allows a fast scribble but not a flood.
     canvas: new RateLimit(120, 60),
     // Asking for the whole drawing or secrets again: a few on mount or reconnect, never a loop.

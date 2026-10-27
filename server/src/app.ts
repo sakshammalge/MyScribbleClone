@@ -133,6 +133,9 @@ export function createInklingServer(options: ServerOptions = {}): InklingServer 
       chat: (socketIds, message) => {
         for (const id of socketIds) io.to(id).emit('chat:message', message);
       },
+      emote: (socketIds, event) => {
+        for (const id of socketIds) io.to(id).emit('emote:show', event);
+      },
       private: (socketId, state) => {
         io.to(socketId).emit('game:private', state);
       },
@@ -248,6 +251,13 @@ export function createInklingServer(options: ServerOptions = {}): InklingServer 
       'chat:send',
       limited('chat', (text, ack) => {
         const result = rooms.chat(socket.id, text);
+        if (typeof ack === 'function') ack(result);
+      }),
+    );
+    socket.on(
+      'emote:send',
+      limited('emote', (index, ack) => {
+        const result = rooms.emote(socket.id, index);
         if (typeof ack === 'function') ack(result);
       }),
     );

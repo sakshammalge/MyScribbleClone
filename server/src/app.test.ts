@@ -5,6 +5,7 @@ import type {
   CanvasEvent,
   ClientToServerEvents,
   DrawOp,
+  EmoteEvent,
   JoinResult,
   PrivateState,
   RoomState,
@@ -156,6 +157,47 @@ describe('canvas events over sockets', () => {
     expect(synced).toEqual([dot]);
 
     [a, b, c].forEach((s) => s.close());
+    await server.io.close();
+  });
+
+  it('shows reactions to the whole room, refuses junk, and rate limits floods', async () => {
+    const server = createInklingServer();
+    await new Promise<void>((done) => server.http.listen(0, '127.0.0.1', done));
+    const url = `http://127.0.0.1:${(server.http.address() as AddressInfo).port}`;
+    const profile = (name: string) => ({ name, avatar: { color: 1, face: 1 } });
+    const [a, b, outsider] = [connect(url), connect(url), connect(url)];
+    const created = await new Promise<JoinResult>((r) => a.emit('room:create', profile('Ada'), r));
+    if (!created.ok) throw new Error(created.error);
+    await new Promise<JoinResult>((r) =>
+      b.emit('room:join', { code: created.room.code, profile: profile('Bo') }, r),
+    );
+    const seenByA: EmoteEvent[] = [];
+    const seenByB: EmoteEvent[] = [];
+    const seenOutside: EmoteEvent[] = [];
+    a.on('emote:show', (e) => seenByA.push(e));
+    b.on('emote:show', (e) => seenByB.push(e));
+    outsider.on('emote:show', (e) => seenOutside.push(e));
+
+    const ok = await new Promise((r) => b.emit('emote:send', 3, r));
+    expect(ok).toEqual({ ok: true });
+    await vi.waitFor(() => expect(seenByA).toHaveLength(1));
+    expect(seenByA[0]).toMatchObject({ name: 'Bo', emote: 3 });
+    expect(seenByB).toHaveLength(1);
+
+    for (const junk of [-1, 99]) {
+      const result = await new Promise((r) => b.emit('emote:send', junk as never, r));
+      expect(result).toEqual({ ok: false, error: 'bad-choice' });
+    }
+    const stranger = await new Promise((r) => outsider.emit('emote:send', 0, r));
+    expect(stranger).toEqual({ ok: false, error: 'not-in-room' });
+
+    const flood = await Promise.all(
+      Array.from({ length: 12 }, () => new Promise((r) => a.emit('emote:send', 0, r))),
+    );
+    expect(flood.some((r) => (r as { error?: string }).error === 'rate-limited')).toBe(true);
+    expect(seenOutside).toEqual([]);
+
+    [a, b, outsider].forEach((x) => x.close());
     await server.io.close();
   });
 });

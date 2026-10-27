@@ -438,3 +438,31 @@ test('the picker labels easy, medium and hard words, and harder words pay more',
   expect(drawerGained).toBe(gained + 50);
   await closeAll(players);
 });
+
+test('reactions float up for everyone, and the pen colour black is true black', async ({
+  browser,
+}) => {
+  const { players, host } = await lobby(browser, 'Ada', 'Bo', 'Cy');
+  const [ada, bo, cy] = players as [Player, Player, Player];
+  await host.page.getByRole('button', { name: 'Start game' }).click();
+  await pick(ada);
+
+  await bo.page.getByRole('button', { name: 'Fire' }).click();
+  for (const p of [ada, bo, cy]) {
+    const float = p.page.getByTestId('emote-float');
+    await expect(float).toHaveCount(1);
+    await expect(float).toContainText('🔥');
+    await expect(float).toContainText('Bo');
+  }
+  // It rises and then goes away on its own.
+  for (const p of [ada, bo, cy]) {
+    await expect(p.page.getByTestId('emote-float')).toHaveCount(0, { timeout: 6000 });
+  }
+  // The emote layer never blocks the canvas or the buttons beneath it.
+  await expect(cy.page.getByTestId('emote-layer')).toHaveCSS('pointer-events', 'none');
+
+  // The first swatch is pure black.
+  const first = ada.page.locator('.swatches .swatch').first();
+  await expect(first).toHaveCSS('background-color', 'rgb(0, 0, 0)');
+  await closeAll(players);
+});

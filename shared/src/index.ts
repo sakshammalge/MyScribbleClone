@@ -21,6 +21,27 @@ export const TURN_TIMING = {
   hintAt: [0.4, 0.7],
 } as const;
 
+/** Quick reactions anyone in a room can send; events carry the index so payloads stay tiny. */
+export const EMOTES = [
+  { emoji: '👍', label: 'Thumbs up' },
+  { emoji: '😂', label: 'Laughing' },
+  { emoji: '😮', label: 'Wow' },
+  { emoji: '❤️', label: 'Love' },
+  { emoji: '🔥', label: 'Fire' },
+  { emoji: '👏', label: 'Applause' },
+  { emoji: '🤔', label: 'Thinking' },
+  { emoji: '😭', label: 'Crying' },
+] as const;
+
+/** One reaction as everyone in the room sees it. */
+export interface EmoteEvent {
+  id: number;
+  playerId: string;
+  name: string;
+  /** Index into EMOTES. */
+  emote: number;
+}
+
 export const CUSTOM_WORDS = { maxWords: 300, minLength: 2, maxLength: 30 } as const;
 export const CHAT_MAX_LENGTH = 80;
 
@@ -179,6 +200,8 @@ export interface ServerToClientEvents {
   'chat:message': (message: ChatMessage) => void;
   /** Everything this player may see so far; replaces the chat log (join, refresh, reconnect). */
   'chat:history': (messages: ChatMessage[]) => void;
+  /** Someone sent a reaction; shown briefly, never stored. */
+  'emote:show': (event: EmoteEvent) => void;
   /** The host removed this player; the seat is gone and the room refuses them from now on. */
   'room:kicked': () => void;
 }
@@ -207,6 +230,8 @@ export interface ClientToServerEvents {
   ) => void;
   /** A guess or a remark; the server decides which it is. */
   'chat:send': (text: string, ack?: (result: ActionResult) => void) => void;
+  /** React with one of EMOTES, by index. */
+  'emote:send': (index: number, ack?: (result: ActionResult) => void) => void;
   /** Ask for the private state again, e.g. right after mounting the game screen. */
   'game:sync': (ack: (state: PrivateState) => void) => void;
   /** Host only: back to the lobby, wiping the board and scores. */

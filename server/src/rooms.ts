@@ -19,6 +19,8 @@ import {
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
   CHAT_MAX_LENGTH,
+  EMOTES,
+  type EmoteEvent,
   SETTINGS_LIMITS,
   TURN_TIMING,
   badName,
@@ -58,6 +60,7 @@ interface Seat {
 /** Where the server sends things that are not part of the shared room snapshot. */
 export interface RoomHooks {
   chat?: (socketIds: string[], message: ChatMessage) => void;
+  emote?: (socketIds: string[], event: EmoteEvent) => void;
   private?: (socketId: string, state: PrivateState) => void;
   /** Multiplies the word-choice and reveal pauses; the draw time is always as configured. */
   timeScale?: number;
@@ -140,6 +143,8 @@ export class RoomManager {
   ) {
     this.roomsByIp = new PerIpCounter(hooks.roomsPerIp ?? Infinity);
   }
+
+  private emoteSeq = 0;
 
   /** Remembers where a socket connected from; kicks and room limits are tied to it. */
   attach(socketId: string, ip: string): void {
@@ -298,6 +303,25 @@ export class RoomManager {
       return { ok: false, error: 'bad-choice' };
     }
     this.beginDrawing(room, room.choices[index]!);
+    return { ok: true };
+  }
+
+  /** A quick reaction, shown to everyone in the room for a moment and never stored. */
+  emote(socketId: string, index: unknown): ActionResult {
+    const where = this.bySocket.get(socketId);
+    const room = where && this.rooms.get(where.code);
+    const seat = room?.seats.find((s) => s.id === where?.playerId);
+    if (!where || !room || !seat) return { ok: false, error: 'not-in-room' };
+    if (typeof index !== 'number' || !Number.isInteger(index) || !EMOTES[index]) {
+      return { ok: false, error: 'bad-choice' };
+    }
+    const ids = room.seats.flatMap((s) => (s.socketId ? [s.socketId] : []));
+    this.hooks.emote?.(ids, {
+      id: ++this.emoteSeq,
+      playerId: seat.id,
+      name: seat.name,
+      emote: index,
+    });
     return { ok: true };
   }
 
