@@ -55,14 +55,14 @@ describe('game loop', () => {
     rooms.start('s-Ada');
     expect(state.phase).toBe('choosing');
     expect(secrets['s-Ada']!.choices).toHaveLength(TURN_TIMING.wordChoices);
-    expect(secrets['s-Bo']).toEqual({ choices: null, word: null });
+    expect(secrets['s-Bo']).toEqual({ choices: null, tiers: null, word: null });
     expect(state.hint).toBeNull();
     expect(rooms.chooseWord('s-Bo', 0)).toEqual({ ok: false, error: 'wrong-phase' });
     expect(rooms.chooseWord('s-Ada', 7)).toEqual({ ok: false, error: 'bad-choice' });
 
     const word = pick('Ada', 1);
-    expect(secrets['s-Ada']).toEqual({ choices: null, word });
-    expect(secrets['s-Bo']).toEqual({ choices: null, word: null });
+    expect(secrets['s-Ada']).toEqual({ choices: null, tiers: null, word });
+    expect(secrets['s-Bo']).toEqual({ choices: null, tiers: null, word: null });
     expect(state.hint).toBe(word.replace(/[a-z0-9]/gi, '_'));
     expect(state.phaseEndsAt).toBe(Date.now() + DRAW_MS);
   });
@@ -314,8 +314,8 @@ describe('game loop', () => {
   it('answers a private-state request for the drawer and for a guesser', () => {
     lobby('Ada', 'Bo');
     const word = begin('Ada');
-    expect(rooms.privateState('s-Ada')).toEqual({ choices: null, word });
-    expect(rooms.privateState('s-Bo')).toEqual({ choices: null, word: null });
-    expect(rooms.privateState('nobody')).toEqual({ choices: null, word: null });
+    expect(rooms.privateState('s-Ada')).toEqual({ choices: null, tiers: null, word });
+    expect(rooms.privateState('s-Bo')).toEqual({ choices: null, tiers: null, word: null });
+    expect(rooms.privateState('nobody')).toEqual({ choices: null, tiers: null, word: null });
   });
 });

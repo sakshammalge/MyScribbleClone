@@ -51,17 +51,39 @@ export function hintOrder(word: string, hints: number): number[] {
   return slots.slice(0, allowed);
 }
 
-/** Points for a correct guess: faster is worth more, and the first few get a bonus. */
-export function guessPoints(remainingFraction: number, place: number): number {
+/** Harder words pay more: easy, medium, hard. Host words count as medium. */
+export const TIER_MULTIPLIER = [1, 1.25, 1.5] as const;
+export const CUSTOM_TIER = 1;
+/** Each hint already on screen takes this share off a correct guess. */
+export const HINT_PENALTY = 0.1;
+/** The drawer's extra reward when every guesser found the word. */
+export const EVERYONE_BONUS = 50;
+
+/**
+ * Points for a correct guess: faster is worth more, the first few get a bonus, harder words pay
+ * more, and every hint already shown makes the answer a little cheaper.
+ */
+export function guessPoints(
+  remainingFraction: number,
+  place: number,
+  tier: number = CUSTOM_TIER,
+  hintsShown = 0,
+): number {
   const speed = Math.round(300 * Math.min(1, Math.max(0, remainingFraction)));
   const bonus = [100, 60, 30][place] ?? 0;
-  return 100 + speed + bonus;
+  const multiplier = TIER_MULTIPLIER[tier] ?? 1;
+  const discount = Math.max(0.5, 1 - HINT_PENALTY * hintsShown);
+  return Math.round((100 + speed + bonus) * multiplier * discount);
 }
 
-/** The drawer earns the average guesser's score, scaled by how many of the room found it. */
+/**
+ * The drawer earns the average guesser's score, scaled by how many of the room found it, plus a
+ * bonus when nobody was left guessing.
+ */
 export function drawerPoints(guesserPoints: number[], guessers: number): number {
   if (guessers <= 0 || guesserPoints.length === 0) return 0;
-  return Math.round(guesserPoints.reduce((a, b) => a + b, 0) / guessers);
+  const average = Math.round(guesserPoints.reduce((a, b) => a + b, 0) / guessers);
+  return average + (guesserPoints.length >= guessers ? EVERYONE_BONUS : 0);
 }
 
 /** Tidy host-supplied words: trimmed, lower-cased, deduplicated and kept to sane lengths. */
@@ -90,40 +112,48 @@ function sample<T>(list: readonly T[], count: number): T[] {
   return out;
 }
 
+export interface WordChoice {
+  word: string;
+  /** 0 easy, 1 medium, 2 hard. */
+  tier: number;
+}
+
 export interface WordPools {
-  bank: readonly string[];
+  /** Easy, medium and hard words, in that order. */
+  tiers: readonly (readonly string[])[];
   custom: readonly string[];
   customOnly: boolean;
   /** Words already drawn this game; skipped until the pool runs dry. */
   used: Set<string>;
 }
 
-/** Offers `count` distinct words, mixing host words in when there are any. */
-export function wordChoices(pools: WordPools, count: number): string[] {
+/** Offers one word from each tier, with host words standing in for some slots when there are any. */
+export function wordChoices(pools: WordPools, count: number): WordChoice[] {
   const fresh = (list: readonly string[]) => list.filter((w) => !pools.used.has(w));
-  let custom = fresh(pools.custom);
-  let bank = fresh(pools.bank);
+  const asCustom = (word: string): WordChoice => ({ word, tier: CUSTOM_TIER });
   if (pools.customOnly && pools.custom.length > 0) {
-    const picks = sample(custom, count);
+    const picks = sample(fresh(pools.custom), count);
     if (picks.length < count) {
       // The host's list is nearly spent: top up with ones already played rather than offer fewer.
       const spare = pools.custom.filter((w) => !picks.includes(w));
       picks.push(...sample(spare, count - picks.length));
     }
-    return picks;
+    return picks.map(asCustom);
   }
-  if (bank.length < count) {
-    pools.used.clear();
-    bank = [...pools.bank];
-    custom = [...pools.custom];
-  }
-  const picks: string[] = [];
-  while (picks.length < count && (custom.length || bank.length)) {
-    // Host words get a fair share: half of the slots while any are left.
-    const fromCustom = custom.length > 0 && (bank.length === 0 || randomInt(2) === 0);
-    const list = fromCustom ? custom : bank;
-    const word = list.splice(randomInt(list.length), 1)[0]!;
-    if (!picks.includes(word)) picks.push(word);
+  if (pools.tiers.some((t) => fresh(t).length < 1)) pools.used.clear();
+  const custom = fresh(pools.custom);
+  const picks: WordChoice[] = [];
+  for (let slot = 0; slot < count; slot++) {
+    const tier = Math.min(slot, pools.tiers.length - 1);
+    const taken = (w: string) => picks.some((p) => p.word === w);
+    if (custom.length > 0 && randomInt(2) === 0) {
+      const word = custom.splice(randomInt(custom.length), 1)[0]!;
+      if (!taken(word)) picks.push(asCustom(word));
+      else slot--;
+      continue;
+    }
+    const options = fresh(pools.tiers[tier]!).filter((w) => !taken(w));
+    picks.push({ word: options[randomInt(options.length)]!, tier });
   }
   return picks;
 }

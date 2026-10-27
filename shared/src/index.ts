@@ -90,6 +90,8 @@ export interface RoomState {
 /** What only one player may know: the drawer's word options and the chosen word. */
 export interface PrivateState {
   choices: string[] | null;
+  /** How hard each choice is, in the same order: 0 easy, 1 medium, 2 hard. */
+  tiers: number[] | null;
   word: string | null;
 }
 
@@ -131,7 +133,8 @@ export type RoomError =
   | 'bad-request';
 
 export type JoinResult =
-  { ok: true; playerId: string; token: string; room: RoomState } | { ok: false; error: RoomError };
+  | { ok: true; playerId: string; token: string; room: RoomState }
+  | { ok: false; error: RoomError };
 
 export type ActionResult = { ok: true } | { ok: false; error: RoomError };
 export type SettingsResult = { ok: true } | { ok: false; error: RoomError };

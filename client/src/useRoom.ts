@@ -36,7 +36,7 @@ export const ERROR_TEXT: Record<ClientError, string> = {
   'bad-request': 'Something went wrong. Try again.',
 };
 
-const NO_SECRETS: PrivateState = { choices: null, word: null };
+const NO_SECRETS: PrivateState = { choices: null, tiers: null, word: null };
 const CHAT_KEPT = 200;
 
 /** Room membership: create, join, leave, host settings, and seat recovery after a dropped connection. */

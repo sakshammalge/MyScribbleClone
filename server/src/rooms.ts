@@ -10,8 +10,9 @@ import {
   isCorrect,
   maskWord,
   wordChoices,
+  type WordChoice,
 } from './game';
-import { WORD_BANK } from './wordlist';
+import { WORD_TIERS } from './wordlist';
 import {
   AVATAR_COLORS,
   AVATAR_FACES,
@@ -84,8 +85,9 @@ interface Room {
   turn: number;
   /** Players still to draw this round, in order. */
   queue: string[];
-  choices: string[] | null;
+  choices: WordChoice[] | null;
   word: string | null;
+  wordTier: number;
   hintOrder: number[];
   revealed: Set<number>;
   phaseEndsAt: number | null;
@@ -166,6 +168,7 @@ export class RoomManager {
       turn: 0,
       queue: [],
       choices: null,
+      wordTier: 1,
       word: null,
       hintOrder: [],
       revealed: new Set(),
@@ -326,7 +329,12 @@ export class RoomManager {
     }
     if (isCorrect(line, room.word)) {
       const remaining = (room.phaseEndsAt ?? 0) - Date.now();
-      const points = guessPoints(remaining / room.phaseMs, room.guessed.size);
+      const points = guessPoints(
+        remaining / room.phaseMs,
+        room.guessed.size,
+        room.wordTier,
+        room.revealed.size,
+      );
       room.guessed.set(seat.id, points);
       seat.score += points;
       this.say(room, {
@@ -350,7 +358,9 @@ export class RoomManager {
   privateState(socketId: string): PrivateState {
     const where = this.bySocket.get(socketId);
     const room = where && this.rooms.get(where.code);
-    return room && where ? this.privateFor(room, where.playerId) : { choices: null, word: null };
+    return room && where
+      ? this.privateFor(room, where.playerId)
+      : { choices: null, tiers: null, word: null };
   }
 
   /** Chat lines this player is allowed to see, oldest first. */
@@ -534,7 +544,7 @@ export class RoomManager {
     room.board.clear();
     room.choices = wordChoices(
       {
-        bank: WORD_BANK,
+        tiers: WORD_TIERS,
         custom: room.customWords,
         customOnly: room.customOnly,
         used: room.used,
@@ -550,9 +560,11 @@ export class RoomManager {
     this.changed(room);
   }
 
-  private beginDrawing(room: Room, word: string): void {
+  private beginDrawing(room: Room, choice: WordChoice): void {
+    const word = choice.word;
     room.used.add(word);
     room.word = word;
+    room.wordTier = choice.tier;
     room.choices = null;
     room.hintOrder = hintOrder(word, TURN_TIMING.hintAt.length);
     room.revealed = new Set();
@@ -653,9 +665,11 @@ export class RoomManager {
   }
 
   private privateFor(room: Room, playerId: string): PrivateState {
-    if (room.drawerId !== playerId) return { choices: null, word: null };
+    if (room.drawerId !== playerId) return { choices: null, tiers: null, word: null };
+    const offered = room.phase === 'choosing' ? room.choices : null;
     return {
-      choices: room.phase === 'choosing' ? room.choices : null,
+      choices: offered && offered.map((c) => c.word),
+      tiers: offered && offered.map((c) => c.tier),
       word: room.phase === 'drawing' ? room.word : null,
     };
   }

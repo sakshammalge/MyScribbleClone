@@ -33,6 +33,8 @@ const PHASE_LABEL: Record<RoomState['phase'], string> = {
 };
 
 /** The studio: players on the left, the sheet in the middle, margin notes on the right. */
+const TIER_LABELS = ['easy', 'medium', 'hard'] as const;
+
 export function Game({
   room,
   myId,
@@ -152,7 +154,13 @@ export function Game({
                 <div className="picker" role="group" aria-label="Choose a word">
                   <p>Pick something to draw</p>
                   {secrets.choices.map((word, i) => (
-                    <button key={word} type="button" className="btn" onClick={() => onChoose(i)}>
+                    <button
+                      key={word}
+                      type="button"
+                      className="btn"
+                      data-tier={TIER_LABELS[secrets.tiers?.[i] ?? 1]}
+                      onClick={() => onChoose(i)}
+                    >
                       {word}
                     </button>
                   ))}
