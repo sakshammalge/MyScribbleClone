@@ -83,6 +83,8 @@ test('the gallery shows every drawing, saves PNGs named after the word, and rese
   const track = a.page.locator('.gallery-track');
   const left = () => track.evaluate((el) => el.scrollLeft);
   await track.evaluate((el) => (el.style.maxWidth = '300px'));
+  // The pointer is still over the Save link from above, which holds the carousel still.
+  await a.page.mouse.move(0, 0);
   await expect.poll(left).toBeGreaterThan(0);
   await track.hover();
   const held = await left();
