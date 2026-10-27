@@ -116,6 +116,14 @@ export interface PrivateState {
   word: string | null;
 }
 
+/** One finished drawing kept for the end-of-game gallery. */
+export interface GalleryDrawing {
+  turn: number;
+  word: string;
+  drawer: string;
+  ops: DrawOp[];
+}
+
 export interface ChatMessage {
   id: number;
   /**
@@ -240,6 +248,8 @@ export interface ClientToServerEvents {
   'canvas:event': (event: CanvasEvent) => void;
   /** Ask for the current drawing, e.g. right after mounting the board. */
   'canvas:sync': (ack: (ops: DrawOp[]) => void) => void;
+  /** Every drawing from the match, once the game has ended (empty before then). */
+  'gallery:sync': (ack: (drawings: GalleryDrawing[]) => void) => void;
 }
 
 export interface Ranked<T extends { score: number }> {

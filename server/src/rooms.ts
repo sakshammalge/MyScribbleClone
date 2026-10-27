@@ -35,6 +35,7 @@ import {
   type CanvasEvent,
   type ChatMessage,
   type DrawOp,
+  type GalleryDrawing,
   type PrivateState,
   type Profile,
   type RoomError,
@@ -84,6 +85,8 @@ interface Room {
   phase: RoomState['phase'];
   drawerId: string | null;
   board: Board;
+  /** Finished drawings, oldest first, for the end-of-game gallery. */
+  gallery: GalleryDrawing[];
   round: number;
   turn: number;
   /** Players still to draw this round, in order. */
@@ -112,6 +115,8 @@ interface Room {
 
 const CHAT_LOG_SIZE = 100;
 const MIN_PHASE_MS = 150;
+/** Drawings kept per game; the oldest go first so a long match stays bounded in memory. */
+const GALLERY_SIZE = 60;
 
 export type Joined = { ok: true; room: RoomState; playerId: string; token: string };
 export type Failed = { ok: false; error: RoomError };
@@ -169,6 +174,7 @@ export class RoomManager {
       phase: 'lobby',
       drawerId: null,
       board: new Board(),
+      gallery: [],
       round: 0,
       turn: 0,
       queue: [],
@@ -412,6 +418,13 @@ export class RoomManager {
     return event ? { code: room.code, event } : null;
   }
 
+  /** Every drawing of the finished game; nothing earlier, so words stay secret. */
+  galleryFor(socketId: string): GalleryDrawing[] {
+    const where = this.bySocket.get(socketId);
+    const room = where && this.rooms.get(where.code);
+    return room && room.phase === 'ended' ? room.gallery : [];
+  }
+
   /** The drawing to show a viewer: live while drawing, kept on screen during the reveal. */
   canvasOps(socketId: string): DrawOp[] {
     const where = this.bySocket.get(socketId);
@@ -540,6 +553,7 @@ export class RoomManager {
     room.revealed.clear();
     room.used.clear();
     room.board.clear();
+    room.gallery = [];
     for (const s of room.seats) s.score = 0;
   }
 
@@ -619,6 +633,16 @@ export class RoomManager {
       gains[drawer.id] = bonus;
     }
     room.reveal = { word: room.word, gains };
+    const ops = room.board.snapshot();
+    if (ops.length > 0) {
+      room.gallery.push({
+        turn: room.turn,
+        word: room.word,
+        drawer: drawer?.name ?? 'Someone',
+        ops,
+      });
+      if (room.gallery.length > GALLERY_SIZE) room.gallery.shift();
+    }
     room.phase = 'reveal';
     this.say(room, {
       kind: 'system',
