@@ -133,8 +133,7 @@ export type RoomError =
   | 'bad-request';
 
 export type JoinResult =
-  | { ok: true; playerId: string; token: string; room: RoomState }
-  | { ok: false; error: RoomError };
+  { ok: true; playerId: string; token: string; room: RoomState } | { ok: false; error: RoomError };
 
 export type ActionResult = { ok: true } | { ok: false; error: RoomError };
 export type SettingsResult = { ok: true } | { ok: false; error: RoomError };
