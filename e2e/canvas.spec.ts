@@ -67,7 +67,7 @@ const pixel = (page: Page, x: number, y: number) =>
 
 const image = (page: Page) => canvas(page).evaluate((el) => (el as HTMLCanvasElement).toDataURL());
 
-const INK = [30, 26, 66];
+const INK = [0, 0, 0];
 const WHITE = [255, 255, 255];
 
 /** Retry until both canvases hold the same pixels. */
@@ -123,7 +123,7 @@ test('colours, sizes, eraser, fill, undo and clear all sync', async ({ browser }
   expect(await pixel(guest.page, 0.5, 0.2 + 0.02)).toEqual([214, 69, 93]);
 
   // Draw a closed box in thin ink, then flood-fill its inside.
-  await h.getByRole('button', { name: 'Colour #1e1a42' }).click();
+  await h.getByRole('button', { name: 'Colour #000000' }).click();
   await h.getByRole('button', { name: 'Size 2' }).click();
   await drag(h, [0.3, 0.5], [0.7, 0.5]);
   await drag(h, [0.7, 0.5], [0.7, 0.9]);

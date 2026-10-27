@@ -536,6 +536,128 @@ body {
 .stage {
   grid-area: stage;
   min-width: 0;
+  position: relative;
+}
+
+.emote-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+
+.emote-btn {
+  width: 44px;
+  height: 44px;
+  font-size: 1.4rem;
+  line-height: 1;
+  border: 2px solid var(--color-border);
+  border-radius: 50%;
+  background: var(--color-surface);
+  cursor: pointer;
+  transition: transform 0.12s;
+}
+
+.emote-btn:hover {
+  transform: translateY(-3px) scale(1.12);
+}
+
+.emote-btn:active {
+  transform: scale(0.9);
+}
+
+.emote-btn:focus-visible {
+  outline: 3px solid var(--color-highlight);
+  outline-offset: 2px;
+}
+
+.emote-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 4;
+}
+
+.emote-float {
+  position: absolute;
+  left: var(--x);
+  bottom: 0;
+  display: grid;
+  justify-items: center;
+  animation: emote-rise 2.6s ease-out forwards;
+}
+
+.emote-glyph {
+  font-size: 2.6rem;
+  line-height: 1;
+  filter: drop-shadow(0 3px 4px rgb(0 0 0 / 25%));
+  animation: emote-wobble 0.9s ease-in-out infinite alternate;
+}
+
+.emote-float small {
+  max-width: 9ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 8px;
+  border-radius: 99px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border: 1px solid var(--color-border);
+  font-weight: 700;
+  font-size: 0.7rem;
+}
+
+@keyframes emote-rise {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.3);
+  }
+  12% {
+    opacity: 1;
+    transform: translate(0, -40px) scale(1.25);
+  }
+  25% {
+    transform: translate(0, -80px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--sway), -340px) scale(0.9);
+  }
+}
+
+@keyframes emote-wobble {
+  from {
+    transform: rotate(calc(var(--tilt) * -1));
+  }
+  to {
+    transform: rotate(var(--tilt));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .emote-float {
+    animation-duration: 1.6s;
+    animation-name: emote-fade;
+    bottom: 40%;
+  }
+
+  .emote-glyph {
+    animation: none;
+  }
+
+  @keyframes emote-fade {
+    0%,
+    100% {
+      opacity: 0;
+    }
+    15%,
+    80% {
+      opacity: 1;
+    }
+  }
 }
 
 .board {

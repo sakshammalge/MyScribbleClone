@@ -7,7 +7,7 @@ export const CANVAS_BACKGROUND = '#ffffff';
 
 /** 20 colours; ops carry the index so payloads stay tiny and the server can validate them. */
 export const PALETTE = [
-  '#1e1a42',
+  '#000000',
   '#6b6b7a',
   '#b9b9c4',
   '#ffffff',

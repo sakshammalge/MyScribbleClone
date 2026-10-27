@@ -10,6 +10,7 @@ import { Avatar } from './Avatar';
 import { Board } from './canvas/Board';
 import { Chat } from './Chat';
 import { useCountdown } from './clock';
+import { EmoteBar, EmoteLayer } from './Emotes';
 
 interface GameProps {
   room: RoomState;
@@ -32,8 +33,9 @@ const PHASE_LABEL: Record<RoomState['phase'], string> = {
   ended: 'Final scores',
 };
 
-/** The studio: players on the left, the sheet in the middle, margin notes on the right. */
 const TIER_LABELS = ['easy', 'medium', 'hard'] as const;
+
+/** The studio: players on the left, the sheet in the middle, margin notes on the right. */
 
 export function Game({
   room,
@@ -197,6 +199,8 @@ export function Game({
             </div>
           )}
         </Board>
+        <EmoteBar />
+        <EmoteLayer />
       </section>
 
       <aside className="margin">
