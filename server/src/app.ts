@@ -296,6 +296,16 @@ export function createInklingServer(options: ServerOptions = {}): InklingServer 
       ),
     );
     socket.on(
+      'gallery:sync',
+      guarded(
+        'sync',
+        (ack) => {
+          if (typeof ack === 'function') ack(rooms.galleryFor(socket.id));
+        },
+        true,
+      ),
+    );
+    socket.on(
       'room:kick',
       limited('actions', (playerId, ack) => {
         const result = rooms.kick(socket.id, playerId);

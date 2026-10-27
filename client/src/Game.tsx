@@ -11,6 +11,7 @@ import { Board } from './canvas/Board';
 import { Chat } from './Chat';
 import { useCountdown } from './clock';
 import { EmoteBar, EmoteLayer } from './Emotes';
+import { Gallery } from './Gallery';
 
 interface GameProps {
   room: RoomState;
@@ -199,6 +200,7 @@ export function Game({
             </div>
           )}
         </Board>
+        {room.phase === 'ended' && <Gallery />}
         <EmoteBar />
         <EmoteLayer />
       </section>

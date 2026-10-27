@@ -1437,3 +1437,52 @@ body {
 .kick:focus-visible {
   opacity: 1;
 }
+
+/* End-of-game gallery: a slow carousel of every drawing, below the board. */
+.gallery {
+  margin-top: var(--space-3);
+  min-width: 0;
+}
+
+.gallery h2 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+}
+
+.gallery-track {
+  display: flex;
+  gap: var(--space-3);
+  overflow-x: auto;
+  padding-bottom: var(--space-2);
+  scrollbar-width: thin;
+}
+
+.gallery-card {
+  flex: 0 0 min(260px, 70%);
+  margin: 0;
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2);
+  text-align: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+
+.gallery-card img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  background: #fff;
+}
+
+.gallery-card figcaption {
+  display: grid;
+}
+
+.gallery-card figcaption span {
+  color: var(--color-ink-muted);
+  font-size: 0.85rem;
+}
