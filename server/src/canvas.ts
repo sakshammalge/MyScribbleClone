@@ -30,6 +30,20 @@ export class Board {
         this.ops.push({ ...event });
         this.used += 1;
         return event;
+      case 'shape': {
+        const last = this.ops[this.ops.length - 1];
+        if (last?.t === 'shape' && last.id === event.id) {
+          // The drawer is still dragging: the newest corners replace the shape we hold.
+          this.ops[this.ops.length - 1] = { ...event };
+          return event;
+        }
+        if (this.ops.length >= STROKE_LIMITS.maxOps || this.used >= STROKE_LIMITS.totalPoints) {
+          return null;
+        }
+        this.ops.push({ ...event });
+        this.used += 1;
+        return event;
+      }
       case 'stroke': {
         const last = this.ops[this.ops.length - 1];
         if (last?.t === 'stroke' && last.id === event.id) {

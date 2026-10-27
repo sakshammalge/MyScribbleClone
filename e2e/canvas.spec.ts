@@ -114,13 +114,13 @@ test('colours, sizes, eraser, fill, undo and clear all sync', async ({ browser }
   const { host, guest } = await startedRoom(browser);
   const h = host.page;
 
-  // Colour #d6455d, widest brush.
-  await h.getByRole('button', { name: 'Colour #d6455d' }).click();
+  // Colour #ff0000, widest brush.
+  await h.getByRole('button', { name: 'Colour #ff0000' }).click();
   await h.getByRole('button', { name: 'Size 5' }).click();
   await drag(h, [0.1, 0.2], [0.9, 0.2]);
-  await expect.poll(() => pixel(guest.page, 0.5, 0.2)).toEqual([214, 69, 93]);
+  await expect.poll(() => pixel(guest.page, 0.5, 0.2)).toEqual([255, 0, 0]);
   // A 40px brush on a 960x720 sheet is ~5.5% of the height: the stroke is thick.
-  expect(await pixel(guest.page, 0.5, 0.2 + 0.02)).toEqual([214, 69, 93]);
+  expect(await pixel(guest.page, 0.5, 0.2 + 0.02)).toEqual([255, 0, 0]);
 
   // Draw a closed box in thin ink, then flood-fill its inside.
   await h.getByRole('button', { name: 'Colour #000000' }).click();
@@ -129,12 +129,12 @@ test('colours, sizes, eraser, fill, undo and clear all sync', async ({ browser }
   await drag(h, [0.7, 0.5], [0.7, 0.9]);
   await drag(h, [0.7, 0.9], [0.3, 0.9]);
   await drag(h, [0.3, 0.9], [0.3, 0.5]);
-  await h.getByRole('button', { name: 'Colour #3cc7b0' }).click();
+  await h.getByRole('button', { name: 'Colour #00ffff' }).click();
   await h.getByRole('button', { name: 'Fill' }).click();
   const box = (await canvas(h).boundingBox())!;
   await canvas(h).click({ position: { x: box.width * 0.5, y: box.height * 0.7 } });
   const inside = () => pixel(guest.page, 0.5, 0.7);
-  await expect.poll(inside).toEqual([60, 199, 176]);
+  await expect.poll(inside).toEqual([0, 255, 255]);
   expect(await pixel(guest.page, 0.05, 0.7)).toEqual(WHITE);
   await expectSame(h, guest.page);
 
@@ -160,9 +160,9 @@ test('colours, sizes, eraser, fill, undo and clear all sync', async ({ browser }
 
 test('late joiners and refreshes get the whole drawing back', async ({ browser }) => {
   const { host, guest, code } = await startedRoom(browser);
-  await host.page.getByRole('button', { name: 'Colour #2a4fd6' }).click();
+  await host.page.getByRole('button', { name: 'Colour #0000ff' }).click();
   await drag(host.page, [0.1, 0.1], [0.9, 0.9], 30);
-  await host.page.getByRole('button', { name: 'Colour #ff6b3d' }).click();
+  await host.page.getByRole('button', { name: 'Colour #ffa500' }).click();
   await drag(host.page, [0.1, 0.9], [0.9, 0.1], 30);
   await expectSame(host.page, guest.page);
   const final = await image(host.page);
@@ -234,4 +234,52 @@ test('the studio fits a phone-sized screen', async ({ browser }) => {
   // The drawer's toolbar fits the narrow screen too.
   await expect(host.page.getByRole('toolbar')).toBeVisible();
   await Promise.all([host.context.close(), phone.close()]);
+});
+
+test('the palette uses the pure standard colours', async ({ browser }) => {
+  const { host, guest } = await startedRoom(browser);
+  const names = await host.page
+    .getByRole('group', { name: 'Colour' })
+    .getByRole('button')
+    .evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
+  for (const hex of ['#ff0000', '#00ff00', '#0000ff', '#ffff00', '#ffffff', '#000000', '#008000']) {
+    expect(names).toContain(`Colour ${hex}`);
+  }
+  await Promise.all([host, guest].map((p) => p.context.close()));
+});
+
+test('shape tools sync live, undo, and survive a late join', async ({ browser }) => {
+  const { host, guest, code } = await startedRoom(browser);
+  const h = host.page;
+  await h.getByRole('button', { name: 'Colour #ff0000' }).click();
+
+  // Solid rectangle.
+  await h.getByRole('button', { name: 'Rectangle' }).click();
+  await h.getByRole('button', { name: 'Solid' }).click();
+  await drag(h, [0.1, 0.1], [0.4, 0.4]);
+  await expect.poll(() => pixel(guest.page, 0.25, 0.25)).toEqual([255, 0, 0]);
+
+  // Outline ellipse: edge is inked, centre stays blank.
+  await h.getByRole('button', { name: 'Solid' }).click();
+  await h.getByRole('button', { name: 'Colour #0000ff' }).click();
+  await h.getByRole('button', { name: 'Ellipse' }).click();
+  await drag(h, [0.5, 0.1], [0.9, 0.5]);
+  await expect.poll(() => pixel(guest.page, 0.9, 0.3)).toEqual([0, 0, 255]);
+  expect(await pixel(guest.page, 0.7, 0.3)).toEqual(WHITE);
+
+  // Line.
+  await h.getByRole('button', { name: 'Colour #000000' }).click();
+  await h.getByRole('button', { name: 'Line' }).click();
+  await drag(h, [0.1, 0.8], [0.9, 0.8]);
+  await expect.poll(() => pixel(guest.page, 0.5, 0.8)).toEqual(INK);
+  await expectSame(h, guest.page);
+
+  // A shape is one undo step, and a late joiner gets the remaining shapes.
+  await h.getByRole('button', { name: 'Undo' }).click();
+  await expect.poll(() => pixel(guest.page, 0.5, 0.8)).toEqual(WHITE);
+  const late = await newPlayer(browser);
+  await joinRoom(late.page, code, 'Cy');
+  await expect.poll(() => pixel(late.page, 0.25, 0.25)).toEqual([255, 0, 0]);
+  await expectSame(h, late.page);
+  await Promise.all([host, guest, late].map((p) => p.context.close()));
 });
