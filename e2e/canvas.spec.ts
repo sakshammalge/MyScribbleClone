@@ -283,3 +283,46 @@ test('shape tools sync live, undo, and survive a late join', async ({ browser })
   await expectSame(h, late.page);
   await Promise.all([host, guest, late].map((p) => p.context.close()));
 });
+
+test.describe('canvas scales with the window', () => {
+  const sizes = [
+    { name: 'phone', width: 390, height: 844 },
+    { name: 'laptop', width: 1366, height: 768 },
+    { name: 'desktop', width: 1920, height: 1080 },
+    { name: 'large desktop', width: 2560, height: 1440 },
+  ];
+  const widths: Record<string, number> = {};
+
+  for (const size of sizes) {
+    test(`${size.name}: fits the window, keeps 4:3 and the logical size`, async ({ browser }) => {
+      const host = await newPlayer(browser, size);
+      const code = await createRoom(host.page, 'Ada');
+      const guest = await newPlayer(browser);
+      await joinRoom(guest.page, code, 'Bo');
+      await host.page.getByRole('button', { name: 'Start game' }).click();
+      const canvas = host.page.getByTestId('drawing-canvas');
+      await expect(canvas).toBeVisible();
+
+      const box = (await canvas.boundingBox())!;
+      expect(box.width / box.height).toBeCloseTo(4 / 3, 1);
+      expect(box.width).toBeLessThanOrEqual(size.width);
+      // Never wider than the window, and no sideways scroll.
+      const overflow = await host.page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+      // The drawing space stays fixed, whatever the display size.
+      const backing = await canvas.evaluate((c: HTMLCanvasElement) => [c.width, c.height]);
+      expect(backing).toEqual([960, 720]);
+      widths[size.name] = box.width;
+      await host.context.close();
+      await guest.context.close();
+    });
+  }
+
+  test('larger windows get a larger sheet', () => {
+    expect(widths['laptop']).toBeGreaterThan(widths['phone']!);
+    expect(widths['desktop']).toBeGreaterThan(widths['laptop']!);
+    expect(widths['large desktop']).toBeGreaterThan(widths['desktop']!);
+  });
+});
