@@ -1,15 +1,17 @@
 import { BRUSH_SIZES, PALETTE } from '@inkling/shared';
 
-export type ToolChoice = 'brush' | 'eraser' | 'fill';
+export type ToolChoice = 'brush' | 'eraser' | 'fill' | 'line' | 'rect' | 'ellipse';
 
 interface ToolbarProps {
   tool: ToolChoice;
   color: number;
   size: number;
+  filled: boolean;
   canUndo: boolean;
   onTool: (t: ToolChoice) => void;
   onColor: (c: number) => void;
   onSize: (s: number) => void;
+  onFilled: (f: boolean) => void;
   onUndo: () => void;
   onClear: () => void;
 }
@@ -27,6 +29,14 @@ const TOOLS: { id: ToolChoice; label: string; key: string; icon: string }[] = [
     label: 'Fill',
     key: 'F',
     icon: 'M5 12l7-8 7 8-7 7zM20 17c0 1-1 2-1 3a1 1 0 002 0c0-1-1-2-1-3z',
+  },
+  { id: 'line', label: 'Line', key: 'L', icon: 'M4 20L20 4' },
+  { id: 'rect', label: 'Rectangle', key: 'R', icon: 'M4 6h16v12H4z' },
+  {
+    id: 'ellipse',
+    label: 'Ellipse',
+    key: 'O',
+    icon: 'M12 5c5 0 9 3 9 7s-4 7-9 7-9-3-9-7 4-7 9-7z',
   },
 ];
 
@@ -63,6 +73,15 @@ export function Toolbar(p: ToolbarProps) {
             <Icon d={t.icon} />
           </button>
         ))}
+        <button
+          type="button"
+          className="tool wide"
+          aria-pressed={p.filled}
+          title="Fill shapes with colour"
+          onClick={() => p.onFilled(!p.filled)}
+        >
+          Solid
+        </button>
       </div>
 
       <div className="case-group" role="group" aria-label="Brush size">

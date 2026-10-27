@@ -6,6 +6,7 @@ import {
   PALETTE,
   type CanvasEvent,
   type DrawOp,
+  type ShapeOp,
   type StrokeOp,
 } from '@inkling/shared';
 import { floodFill } from './floodFill';
@@ -52,6 +53,17 @@ export class Surface {
         this.ops.push({ ...event });
         this.paintFill(event);
         return;
+      case 'shape': {
+        const last = this.ops[this.ops.length - 1];
+        if (last?.t === 'shape' && last.id === event.id) {
+          this.ops[this.ops.length - 1] = { ...event };
+          this.repaint();
+        } else {
+          this.ops.push({ ...event });
+          this.paintShape(event);
+        }
+        return;
+      }
       case 'stroke': {
         const last = this.ops[this.ops.length - 1];
         if (last?.t === 'stroke' && last.id === event.id) {
@@ -81,6 +93,7 @@ export class Surface {
     this.paintBlank();
     for (const op of this.ops) {
       if (op.t === 'fill') this.paintFill(op);
+      else if (op.t === 'shape') this.paintShape(op);
       else this.paintSegments(op, op.points, true);
     }
   }
@@ -109,6 +122,37 @@ export class Surface {
       ctx.lineTo(px(i), py(i));
       ctx.stroke();
     }
+  }
+
+  private paintShape(op: ShapeOp): void {
+    const { ctx } = this;
+    const x0 = op.x0 * CANVAS_WIDTH;
+    const y0 = op.y0 * CANVAS_HEIGHT;
+    const x1 = op.x1 * CANVAS_WIDTH;
+    const y1 = op.y1 * CANVAS_HEIGHT;
+    ctx.fillStyle = ctx.strokeStyle = PALETTE[op.color]!;
+    ctx.lineWidth = BRUSH_SIZES[op.size]!;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    if (op.kind === 'line') {
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+    } else if (op.kind === 'rect') {
+      ctx.rect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0));
+    } else {
+      ctx.ellipse(
+        (x0 + x1) / 2,
+        (y0 + y1) / 2,
+        Math.abs(x1 - x0) / 2,
+        Math.abs(y1 - y0) / 2,
+        0,
+        0,
+        Math.PI * 2,
+      );
+    }
+    if (op.filled && op.kind !== 'line') ctx.fill();
+    else ctx.stroke();
   }
 
   private paintFill(op: { color: number; x: number; y: number }): void {

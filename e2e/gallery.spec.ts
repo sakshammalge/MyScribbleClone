@@ -78,6 +78,9 @@ test('the gallery shows every drawing, saves PNGs named after the word, and rese
   const png = await (await import('node:fs/promises')).readFile((await file.path())!);
   expect(png.subarray(1, 4).toString()).toBe('PNG');
   expect(png.length).toBeGreaterThan(2000);
+  // The saved image is the 960x720 drawing plus the caption strip with the word and drawer.
+  expect(png.readUInt32BE(16)).toBe(960);
+  expect(png.readUInt32BE(20)).toBe(720 + 64);
 
   // The carousel scrolls by itself, and holds still while hovered.
   const track = a.page.locator('.gallery-track');

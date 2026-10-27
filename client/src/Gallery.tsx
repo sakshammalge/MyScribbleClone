@@ -5,13 +5,41 @@ import { socket } from './socket';
 
 interface Shot extends GalleryDrawing {
   png: string;
+  saved: string;
 }
+
+/** The caption strip baked under a saved PNG. */
+const CAPTION_HEIGHT = 64;
 
 /** Paints a finished drawing on an offscreen canvas and returns it as a PNG data URL. */
 function render(drawing: GalleryDrawing): string {
   const canvas = document.createElement('canvas');
   new Surface(canvas).reset(drawing.ops);
   return canvas.toDataURL('image/png');
+}
+
+/** The same drawing with the word and the drawer's name printed under it, for Save PNG. */
+function renderLabelled(drawing: GalleryDrawing): string {
+  const art = document.createElement('canvas');
+  new Surface(art).reset(drawing.ops);
+  const out = document.createElement('canvas');
+  out.width = art.width;
+  out.height = art.height + CAPTION_HEIGHT;
+  const ctx = out.getContext('2d')!;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, out.width, out.height);
+  ctx.drawImage(art, 0, 0);
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, art.height, out.width, 2);
+  ctx.textBaseline = 'middle';
+  const y = art.height + CAPTION_HEIGHT / 2 + 1;
+  ctx.textAlign = 'left';
+  ctx.font = 'bold 30px system-ui, sans-serif';
+  ctx.fillText(drawing.word, 20, y, out.width * 0.55);
+  ctx.textAlign = 'right';
+  ctx.font = '24px system-ui, sans-serif';
+  ctx.fillText(`drawn by ${drawing.drawer}`, out.width - 20, y, out.width * 0.4);
+  return out.toDataURL('image/png');
 }
 
 /** "Giraffe Neck!" becomes "inkling-giraffe-neck". */
@@ -34,7 +62,9 @@ export function Gallery() {
   // Fetched on mount and after every reconnect, so late joiners and refreshes see all of them.
   useEffect(() => {
     const load = () =>
-      socket.emit('gallery:sync', (list) => setShots(list.map((d) => ({ ...d, png: render(d) }))));
+      socket.emit('gallery:sync', (list) =>
+        setShots(list.map((d) => ({ ...d, png: render(d), saved: renderLabelled(d) }))),
+      );
     socket.on('connect', load);
     if (socket.connected) load();
     return () => {
@@ -99,7 +129,7 @@ export function Gallery() {
               <strong>{s.word}</strong>
               <span>drawn by {s.drawer}</span>
             </figcaption>
-            <a className="link" href={s.png} download={fileName(s.word)}>
+            <a className="link" href={s.saved} download={fileName(s.word)}>
               Save PNG
             </a>
           </figure>

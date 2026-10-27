@@ -32,6 +32,7 @@ export function Board({ canDraw, drawerName, note, children }: BoardProps) {
   const [tool, setTool] = useState<ToolChoice>('brush');
   const [color, setColor] = useState(0);
   const [size, setSize] = useState(2);
+  const [filled, setFilled] = useState(false);
   const [ops, setOps] = useState(0);
 
   // The pointer handlers read the toolbar through refs so a mid-stroke re-render cannot change them.
@@ -41,9 +42,20 @@ export function Board({ canDraw, drawerName, note, children }: BoardProps) {
   toolRef.current = tool;
   colorRef.current = color;
   sizeRef.current = size;
+  const filledRef = useRef(filled);
+  filledRef.current = filled;
+
+  // The shape being dragged: its id, anchor, and the last corner sent.
+  const shape = useRef<{
+    id: string;
+    from: [number, number];
+    to: [number, number];
+    sent: string;
+  } | null>(null);
 
   // The pen stroke being drawn: its id and the points not yet sent.
   const pen = useRef<{ id: string; pending: number[]; last: [number, number] } | null>(null);
+  const shiftRef = useRef(false);
   const flushTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Mirror the room's drawing onto the canvas, and ask for the current picture on mount.
@@ -92,12 +104,49 @@ export function Board({ canDraw, drawerName, note, children }: BoardProps) {
     }
   }, [send]);
 
+  const sendShape = useCallback(
+    (shift: boolean) => {
+      const sh = shape.current;
+      if (!sh) return;
+      let [x1, y1] = sh.to;
+      const kind = toolRef.current as 'line' | 'rect' | 'ellipse';
+      if (shift && kind !== 'line') {
+        // Square or circle: equal pixel sides, following the pointer's quadrant.
+        const dx = (x1 - sh.from[0]) * CANVAS_WIDTH;
+        const dy = (y1 - sh.from[1]) * CANVAS_HEIGHT;
+        const side = Math.max(Math.abs(dx), Math.abs(dy));
+        x1 = Math.min(1, Math.max(0, sh.from[0] + (Math.sign(dx) * side) / CANVAS_WIDTH));
+        y1 = Math.min(1, Math.max(0, sh.from[1] + (Math.sign(dy) * side) / CANVAS_HEIGHT));
+      }
+      const key = `${x1},${y1}`;
+      if (key === sh.sent) return;
+      sh.sent = key;
+      send({
+        t: 'shape',
+        id: sh.id,
+        kind,
+        filled: filledRef.current,
+        color: colorRef.current,
+        size: sizeRef.current,
+        x0: sh.from[0],
+        y0: sh.from[1],
+        x1,
+        y1,
+      });
+    },
+    [send],
+  );
+
   const stopPen = useCallback(() => {
+    if (shape.current) {
+      sendShape(shiftRef.current);
+      shape.current = null;
+    }
     if (flushTimer.current) clearInterval(flushTimer.current);
     flushTimer.current = null;
     flush();
     pen.current = null;
-  }, [flush]);
+  }, [flush, sendShape]);
 
   useEffect(() => stopPen, [stopPen]);
 
@@ -118,6 +167,13 @@ export function Board({ canDraw, drawerName, note, children }: BoardProps) {
       return;
     }
     e.currentTarget.setPointerCapture(e.pointerId);
+    if (tool === 'line' || tool === 'rect' || tool === 'ellipse') {
+      shiftRef.current = e.shiftKey;
+      shape.current = { id: newId(), from: [x, y], to: [x, y], sent: '' };
+      sendShape(e.shiftKey);
+      flushTimer.current = setInterval(() => sendShape(shiftRef.current), FLUSH_MS);
+      return;
+    }
     pen.current = { id: newId(), pending: [x, y], last: [x, y] };
     flush();
     flushTimer.current = setInterval(flush, FLUSH_MS);
@@ -130,11 +186,13 @@ export function Board({ canDraw, drawerName, note, children }: BoardProps) {
     const d = BRUSH_SIZES[size]! * (rect.width / CANVAS_WIDTH);
     ring.style.width = ring.style.height = `${Math.max(d, 6)}px`;
     ring.style.transform = `translate(${e.clientX - rect.left - d / 2}px, ${e.clientY - rect.top - d / 2}px)`;
-    ring.hidden = tool === 'fill';
+    ring.hidden = tool === 'fill' || tool === 'line' || tool === 'rect' || tool === 'ellipse';
   };
 
   const onMove = (e: PointerEvent<HTMLCanvasElement>) => {
     moveCursor(e);
+    shiftRef.current = e.shiftKey;
+    if (shape.current) shape.current.to = pointOf(e);
     const p = pen.current;
     if (!p) return;
     const samples = e.nativeEvent.getCoalescedEvents?.() ?? [];
@@ -160,8 +218,9 @@ export function Board({ canDraw, drawerName, note, children }: BoardProps) {
         e.preventDefault();
         send({ t: 'undo' });
       } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-        const next = { b: 'brush', e: 'eraser', f: 'fill' }[e.key.toLowerCase()] as
-          ToolChoice | undefined;
+        const next = { b: 'brush', e: 'eraser', f: 'fill', l: 'line', r: 'rect', o: 'ellipse' }[
+          e.key.toLowerCase()
+        ] as ToolChoice | undefined;
         if (next) setTool(next);
       }
     };
@@ -195,6 +254,8 @@ export function Board({ canDraw, drawerName, note, children }: BoardProps) {
           tool={tool}
           color={color}
           size={size}
+          filled={filled}
+          onFilled={setFilled}
           canUndo={ops > 0}
           onTool={setTool}
           onColor={(c) => {
