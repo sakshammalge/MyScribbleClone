@@ -90,6 +90,8 @@ export interface RoomState {
 /** What only one player may know: the drawer's word options and the chosen word. */
 export interface PrivateState {
   choices: string[] | null;
+  /** How hard each choice is, in the same order: 0 easy, 1 medium, 2 hard. */
+  tiers: number[] | null;
   word: string | null;
 }
 

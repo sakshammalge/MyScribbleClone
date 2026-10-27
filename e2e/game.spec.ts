@@ -413,3 +413,28 @@ test('turn results rank the points, and the podium puts the leader in the middle
   void cy;
   await closeAll(players);
 });
+
+test('the picker labels easy, medium and hard words, and harder words pay more', async ({
+  browser,
+}) => {
+  const { players, host } = await lobby(browser, 'Ada', 'Bo');
+  const [ada, bo] = players as [Player, Player];
+  await host.page.getByRole('button', { name: 'Start game' }).click();
+  await expect(choices(ada)).toHaveCount(3);
+  await expect(choices(ada).nth(0)).toHaveAttribute('data-tier', 'easy');
+  await expect(choices(ada).nth(1)).toHaveAttribute('data-tier', 'medium');
+  await expect(choices(ada).nth(2)).toHaveAttribute('data-tier', 'hard');
+
+  // Guessing right away is worth close to the maximum, scaled up for the hard word.
+  const hard = (await choices(ada).nth(2).innerText()).trim();
+  await choices(ada).nth(2).click();
+  await guess(bo, hard);
+  await expect(bo.page.getByTestId('reveal')).toContainText(hard);
+  const gained = Number((await score(bo, 'Bo').innerText()).replace(/\D/g, ''));
+  expect(gained).toBeGreaterThan(500);
+  expect(gained).toBeLessThanOrEqual(750);
+  // The only guesser found it, so the drawer earns the average plus the everyone-guessed bonus.
+  const drawerGained = Number((await score(ada, 'Ada').innerText()).replace(/\D/g, ''));
+  expect(drawerGained).toBe(gained + 50);
+  await closeAll(players);
+});
