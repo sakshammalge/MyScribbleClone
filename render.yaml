@@ -1,13 +1,6 @@
 # Render Blueprint for Inkling. Game state lives in memory, so run exactly one instance.
-# All-time stats and the leaderboard live in Postgres so they survive restarts and deploys.
-# The free database expires about 30 days after it is created: upgrade its plan in the Render
-# dashboard before then (or the stats are deleted), and change `plan` here to match.
-databases:
-  - name: inkling-db
-    plan: free
-    databaseName: inkling
-    user: inkling
-    ipAllowList: [] # only reachable from inside Render
+# All-time stats live in Postgres. Set DATABASE_URL (and INKLING_DATABASE_SSL=1 for a hosted
+# database such as Supabase's session pooler) in the dashboard; without it stats stay in memory.
 
 services:
   - type: web
@@ -26,6 +19,6 @@ services:
       - key: INKLING_TRUST_PROXY
         value: '1'
       - key: DATABASE_URL
-        fromDatabase:
-          name: inkling-db
-          property: connectionString
+        sync: false # secret: paste the Postgres connection string in the dashboard
+      - key: INKLING_DATABASE_SSL
+        value: '1'
