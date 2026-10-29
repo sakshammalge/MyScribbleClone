@@ -25,6 +25,9 @@ CREATE TABLE IF NOT EXISTS player_stats (
 );
 CREATE INDEX IF NOT EXISTS player_stats_wins ON player_stats (wins DESC, total_points DESC);
 CREATE INDEX IF NOT EXISTS player_stats_points ON player_stats (total_points DESC);
+-- Device ids are secrets. On hosts that expose tables over an API (Supabase), RLS with no policies
+-- keeps the table private; the server connects as the owner, which bypasses it.
+ALTER TABLE player_stats ENABLE ROW LEVEL SECURITY;
 `;
 
 const ORDER: Record<LeaderboardSort, string> = {
