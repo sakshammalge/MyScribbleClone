@@ -1486,3 +1486,103 @@ body {
   color: var(--color-ink-muted);
   font-size: 0.85rem;
 }
+
+/* All-time leaderboard and stats */
+.board-link {
+  justify-self: center;
+}
+
+.stat-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-3);
+}
+
+.stat-grid dt {
+  color: var(--color-ink-muted);
+  font-size: 0.85rem;
+}
+
+.stat-grid dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.tab {
+  border: 2px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab[aria-selected='true'] {
+  background: var(--color-ink);
+  color: var(--color-bg);
+  border-color: var(--color-ink);
+}
+
+.tab:focus-visible {
+  outline: 3px solid var(--color-highlight);
+  outline-offset: 2px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  justify-self: stretch;
+}
+
+.rank-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rank-table th,
+.rank-table td {
+  padding: var(--space-2) var(--space-2);
+  text-align: right;
+  border-bottom: 1px solid var(--color-border);
+  font-variant-numeric: tabular-nums;
+}
+
+.rank-table thead th {
+  color: var(--color-ink-muted);
+  font-size: 0.85rem;
+}
+
+.rank-table th[scope='row'],
+.rank-table thead th:nth-child(2) {
+  text-align: left;
+  font-weight: 600;
+}
+
+.rank-table td:first-child,
+.rank-table thead th:first-child {
+  text-align: left;
+  width: 2.5rem;
+}
+
+.rank-table tr[data-you='true'] {
+  background: color-mix(in srgb, var(--color-highlight) 22%, transparent);
+}
+
+.you-tag {
+  margin-left: var(--space-2);
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+  font-size: 0.75rem;
+}

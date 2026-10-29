@@ -1,4 +1,7 @@
 # Render Blueprint for Inkling. Game state lives in memory, so run exactly one instance.
+# All-time stats live in Postgres. Set DATABASE_URL (and INKLING_DATABASE_SSL=1 for a hosted
+# database such as Supabase's session pooler) in the dashboard; without it stats stay in memory.
+
 services:
   - type: web
     name: inkling
@@ -14,4 +17,8 @@ services:
       - key: INKLING_LAN
         value: '0'
       - key: INKLING_TRUST_PROXY
+        value: '1'
+      - key: DATABASE_URL
+        sync: false # secret: paste the Postgres connection string in the dashboard
+      - key: INKLING_DATABASE_SSL
         value: '1'

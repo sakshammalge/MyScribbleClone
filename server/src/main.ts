@@ -2,6 +2,8 @@ import { DEFAULT_PORT } from '@inkling/shared';
 import { parseTrustProxy } from './abuse';
 import { clientBuilt, createInklingServer } from './app';
 import { lanAddresses } from './lan';
+import { PgStats } from './pgstats';
+import { MemoryStats, type StatsStore } from './stats';
 
 const port = Number(process.env.PORT ?? DEFAULT_PORT);
 // INKLING_TIME_SCALE=0.1 shortens the pauses between turns (used by e2e tests).
@@ -15,7 +17,29 @@ const lanMode = process.env.INKLING_LAN
 // limits and kicks see the visitor's address rather than the proxy's. Leave unset when exposed
 // directly, because the forwarding header can then be forged. The other knobs tune per-address caps.
 const positive = (v: string | undefined) => (Number(v) > 0 ? Number(v) : undefined);
+// All-time stats go to Postgres when DATABASE_URL is set (Render provides it); otherwise they live
+// in memory, which is fine for local play and LAN parties but resets on every restart.
+// INKLING_DATABASE_SSL=1 is for databases reached over their public address.
+let stats: StatsStore = new MemoryStats();
+if (process.env.DATABASE_URL) {
+  try {
+    stats = await PgStats.connect(
+      process.env.DATABASE_URL,
+      process.env.INKLING_DATABASE_SSL === '1',
+    );
+    console.log('Stats: saving to Postgres.');
+  } catch (err) {
+    console.error(
+      `Stats: could not reach the database (${err instanceof Error ? err.message : String(err)}). ` +
+        'Falling back to memory, so all-time stats will be lost on restart.',
+    );
+  }
+} else {
+  console.log('Stats: no DATABASE_URL, keeping all-time stats in memory only.');
+}
+
 const { http, io } = createInklingServer({
+  stats,
   timeScale,
   trustProxy: parseTrustProxy(process.env.INKLING_TRUST_PROXY),
   maxConnectionsPerIp: positive(process.env.INKLING_MAX_CONNECTIONS_PER_IP),
@@ -70,7 +94,7 @@ function shutdown(signal: string) {
   console.log(`${signal} received, shutting down.`);
   // Rooms are in memory, so there is nothing to flush; force exit if connections linger.
   setTimeout(() => process.exit(0), 5000).unref();
-  io.close(() => process.exit(0));
+  io.close(() => void stats.close().finally(() => process.exit(0)));
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));

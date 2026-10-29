@@ -12,10 +12,12 @@ import {
   wordChoices,
   type WordChoice,
 } from './game';
+import type { GameEntry } from './stats';
 import { WORD_TIERS } from './wordlist';
 import {
   AVATAR_COLORS,
   AVATAR_FACES,
+  DEVICE_ID_PATTERN,
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
   CHAT_MAX_LENGTH,
@@ -56,6 +58,12 @@ interface Seat {
   score: number;
   /** Address the seat last connected from, for binding kicks to more than a name. */
   ip: string | null;
+  /** The browser's all-time identity; null when it sent none or another seat here has it. */
+  deviceId: string | null;
+  /** This game's tallies for the stats: correct guesses, words drawn, drawings someone solved. */
+  correct: number;
+  drawn: number;
+  solved: number;
 }
 
 /** Where the server sends things that are not part of the shared room snapshot. */
@@ -63,6 +71,8 @@ export interface RoomHooks {
   chat?: (socketIds: string[], message: ChatMessage) => void;
   emote?: (socketIds: string[], event: EmoteEvent) => void;
   private?: (socketId: string, state: PrivateState) => void;
+  /** A game ran to its natural end; these are the devices to credit. */
+  recordGame?: (entries: GameEntry[]) => void;
   /** Multiplies the word-choice and reveal pauses; the draw time is always as configured. */
   timeScale?: number;
   /** Open rooms one address may have started at once. */
@@ -107,6 +117,8 @@ interface Room {
   used: Set<string>;
   chat: Logged[];
   chatSeq: number;
+  /** Set once the finished game has been reported, so it can never be counted twice. */
+  recorded: boolean;
   /** The address that started the room, so its slot is returned when the room closes. */
   ownerIp: string | null;
   /** What a kicked player may not come back with: a name alone is too easy to change. */
@@ -193,11 +205,12 @@ export class RoomManager {
       used: new Set(),
       chat: [],
       chatSeq: 0,
+      recorded: false,
       ownerIp: this.ips.get(socketId) ?? null,
       banned: { names: new Set(), tokens: new Set(), ips: new Set() },
     };
     this.rooms.set(room.code, room);
-    const seat = this.seat(room, socketId, name, profile.avatar);
+    const seat = this.seat(room, socketId, name, profile);
     room.hostId = seat.id;
     this.changed(room);
     return { ok: true, room: this.snapshot(room), playerId: seat.id, token: seat.token };
@@ -238,7 +251,7 @@ export class RoomManager {
       return { ok: false, error: 'name-taken' };
     }
     if (room.seats.length >= room.settings.maxPlayers) return { ok: false, error: 'room-full' };
-    const seat = this.seat(room, socketId, name, profile.avatar);
+    const seat = this.seat(room, socketId, name, profile);
     this.ensureHost(room);
     this.changed(room);
     return { ok: true, room: this.snapshot(room), playerId: seat.id, token: seat.token };
@@ -367,6 +380,7 @@ export class RoomManager {
       );
       room.guessed.set(seat.id, points);
       seat.score += points;
+      seat.correct++;
       this.say(room, {
         kind: 'correct',
         name: seat.name,
@@ -554,7 +568,13 @@ export class RoomManager {
     room.used.clear();
     room.board.clear();
     room.gallery = [];
-    for (const s of room.seats) s.score = 0;
+    room.recorded = false;
+    for (const s of room.seats) {
+      s.score = 0;
+      s.correct = 0;
+      s.drawn = 0;
+      s.solved = 0;
+    }
   }
 
   /** Hands the pen to the next player, rolling over into the next round or the final standings. */
@@ -569,7 +589,7 @@ export class RoomManager {
       room.round++;
       room.queue = room.seats.filter((s) => s.socketId).map((s) => s.id);
     }
-    this.endGame(room);
+    this.endGame(room, true);
   }
 
   private startTurn(room: Room, drawer: Seat): void {
@@ -630,6 +650,8 @@ export class RoomManager {
     if (drawer) {
       const bonus = drawerPoints([...room.guessed.values()], guessers);
       drawer.score += bonus;
+      drawer.drawn++;
+      if (room.guessed.size > 0) drawer.solved++;
       gains[drawer.id] = bonus;
     }
     room.reveal = { word: room.word, gains };
@@ -655,7 +677,8 @@ export class RoomManager {
     this.changed(room);
   }
 
-  private endGame(room: Room): void {
+  /** `completed` is true only when every round was played; a room that emptied out is not a result. */
+  private endGame(room: Room, completed = false): void {
     this.clearTimers(room);
     room.phase = 'ended';
     room.drawerId = null;
@@ -674,7 +697,38 @@ export class RoomManager {
         text: `Game over! ${verdict} with ${winners[0]!.score}.`,
       });
     }
+    if (completed) this.recordResult(room);
     this.changed(room);
+  }
+
+  /**
+   * Credits the finished game to the devices that played it. The numbers come from the server's
+   * own scoring, never from a client. A game counts only when it ran its full course, someone
+   * really found a word, and at least two distinct devices took part.
+   */
+  private recordResult(room: Room): void {
+    if (room.recorded) return;
+    room.recorded = true;
+    if (!this.hooks.recordGame) return;
+    const ranked = rankPlayers(room.seats);
+    const entries: GameEntry[] = ranked.flatMap(({ player, place }) =>
+      player.deviceId
+        ? [
+            {
+              deviceId: player.deviceId,
+              name: player.name,
+              score: player.score,
+              place,
+              players: room.seats.length,
+              correctGuesses: player.correct,
+              wordsDrawn: player.drawn,
+              drawingsSolved: player.solved,
+            },
+          ]
+        : [],
+    );
+    const anyGuess = room.seats.some((s) => s.correct > 0);
+    if (entries.length >= 2 && anyGuess) this.hooks.recordGame(entries);
   }
 
   private everyoneGuessed(room: Room): boolean {
@@ -722,16 +776,28 @@ export class RoomManager {
     };
   }
 
-  private seat(room: Room, socketId: string, name: string, avatar: Profile['avatar']): Seat {
+  private seat(room: Room, socketId: string, name: string, profile: Profile): Seat {
+    const claimed = profile?.deviceId;
+    // One device is one player: a second tab on the same device plays on, but earns nothing.
+    const deviceId =
+      typeof claimed === 'string' &&
+      DEVICE_ID_PATTERN.test(claimed) &&
+      !room.seats.some((s) => s.deviceId === claimed)
+        ? claimed
+        : null;
     const seat: Seat = {
       id: randomUUID(),
       token: randomBytes(16).toString('hex'),
       name,
-      avatar: cleanAvatar(avatar),
+      avatar: cleanAvatar(profile?.avatar),
       socketId,
       dropTimer: null,
       score: 0,
       ip: this.ips.get(socketId) ?? null,
+      deviceId,
+      correct: 0,
+      drawn: 0,
+      solved: 0,
     };
     room.seats.push(seat);
     // Someone arriving mid-round gets a turn at the end of it.

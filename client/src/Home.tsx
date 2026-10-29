@@ -23,6 +23,7 @@ interface HomeProps {
   onCreate: () => void;
   onJoin: (code: string) => void;
   onDeclineInvite: () => void;
+  onLeaderboard: () => void;
 }
 
 export function Home({
@@ -35,6 +36,7 @@ export function Home({
   onCreate,
   onJoin,
   onDeclineInvite,
+  onLeaderboard,
 }: HomeProps) {
   const [typedCode, setTypedCode] = useState('');
   const nameOk = profile.name.trim().length > 0;
@@ -171,6 +173,9 @@ export function Home({
         )}
         {!connected && <p className="muted">Connecting to the server…</p>}
       </form>
+      <button type="button" className="link board-link" onClick={onLeaderboard}>
+        🏆 Leaderboard &amp; my stats
+      </button>
     </main>
   );
 }
