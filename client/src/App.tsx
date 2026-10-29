@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Game } from './Game';
 import { Home } from './Home';
+import { Leaderboard } from './Leaderboard';
 import { Lobby } from './Lobby';
-import { codeFromPath, invitePath, usePath } from './route';
+import { LEADERBOARD_PATH, codeFromPath, invitePath, usePath } from './route';
 import { loadProfile } from './session';
 import { useConnection } from './useConnection';
 import { useRoom } from './useRoom';
@@ -86,6 +87,8 @@ export function App() {
     );
   }
 
+  if (path === LEADERBOARD_PATH) return <Leaderboard onBack={goHome} />;
+
   return (
     <Home
       profile={profile}
@@ -97,6 +100,7 @@ export function App() {
       onCreate={() => create({ ...profile, name: profile.name.trim() })}
       onJoin={(code) => join(code, { ...profile, name: profile.name.trim() })}
       onDeclineInvite={goHome}
+      onLeaderboard={() => go(LEADERBOARD_PATH)}
     />
   );
 }

@@ -84,7 +84,7 @@ The live game runs as a Render Docker web service named `inkling`, built from th
 
 - Plan: free, region Singapore, one instance.
 - Health check: `/healthz`. Auto-deploy from `main` on every commit.
-- Environment: `NODE_ENV=production`, `INKLING_LAN=0`, `INKLING_TRUST_PROXY=1`.
+- Environment: `NODE_ENV=production`, `INKLING_LAN=0`, `INKLING_TRUST_PROXY=1`, and `DATABASE_URL` (the Internal Database URL of a Render Postgres; see Leaderboard and stats).
 - The service was created through the Render API and is not linked to the `render.yaml` Blueprint, which documents the same settings for anyone recreating it. Editing `render.yaml` does not change the live service; change settings in the Render dashboard.
 - API keys and other secrets never go in the repo.
 
@@ -105,6 +105,14 @@ Strokes travel as 0 to 1 fractions of a fixed 960x720 sheet, batched about every
 ## Scoring and results
 
 A correct guess is worth 100 plus up to 300 for the time left, plus 100/60/30 for the first three guessers; the drawer earns the average guesser's score, scaled by how many found it (`server/src/game.ts`). After each turn the reveal lists the points biggest first and the scoreboard shows a `+N` chip. At the end the top three stand on a podium (equal scores share a place and announce a tie), and the host can hit Play again for an immediate rematch with the same players, or go back to the lobby.
+
+## Leaderboard and stats
+
+Every browser makes a random device id on its first visit (kept in `localStorage`) and sends it when joining a room. After a game that ran all its rounds, the server credits each device with its games, wins, podium finishes (top three, in games of three or more), points, correct guesses, words drawn and drawings that got guessed. The Home page links to `/leaderboard`, which shows your own stats and the top players by wins, points or games played. Rows are keyed by the device id, so renaming yourself changes the name shown and nothing else. A device id cannot be a MAC address (browsers never expose one), and clearing site data or switching browser starts a new player.
+
+- **Trust.** Clients never send scores. The server tallies results from its own scoring, and a game counts only if it ran to the end, someone found a word, and at least two distinct devices played. The device id is a secret credential: it is never broadcast, and the API only marks which row is yours. A device is credited at most 12 games an hour, and a second tab on the same device in one room earns nothing.
+- **Storage.** With `DATABASE_URL` set, stats are saved to Postgres (table `player_stats`, created on startup). Without it they stay in memory, so local and LAN play works with no setup but forgets everything on restart. Set `INKLING_DATABASE_SSL=1` when connecting to a database over its public address. The tests in `server/src/pgstats.test.ts` run when `TEST_DATABASE_URL` points at a Postgres (CI provides one).
+- **Render's free Postgres expires** about 30 days after creation. Upgrade the database's plan in the Render dashboard before then, or the stats are deleted.
 
 ## Checks
 

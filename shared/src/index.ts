@@ -141,7 +141,43 @@ export interface ChatMessage {
 export interface Profile {
   name: string;
   avatar: Avatar;
+  /**
+   * Random id the browser made on its first visit. It is the player's all-time identity for
+   * stats, so it is a secret: the server never broadcasts it.
+   */
+  deviceId?: string;
 }
+
+/** 128 random bits as hex; the shape the server accepts as a device id. */
+export const DEVICE_ID_PATTERN = /^[0-9a-f]{32}$/;
+export const DEVICE_ID_HEADER = 'x-device-id';
+
+/** One device's lifetime totals, as shown on the stats card and the leaderboard. */
+export interface PlayerStats {
+  /** The name this device used most recently. */
+  name: string;
+  games: number;
+  wins: number;
+  /** Top-three finishes in games of three or more players. */
+  podiums: number;
+  totalPoints: number;
+  bestScore: number;
+  correctGuesses: number;
+  wordsDrawn: number;
+  /** Drawings that at least one player guessed. */
+  drawingsSolved: number;
+  /** Epoch ms of the last finished game. */
+  lastPlayed: number;
+}
+
+export interface LeaderboardEntry extends PlayerStats {
+  rank: number;
+  /** This row belongs to the device that asked. */
+  isYou: boolean;
+}
+
+export const LEADERBOARD_SORTS = ['wins', 'points', 'games'] as const;
+export type LeaderboardSort = (typeof LEADERBOARD_SORTS)[number];
 
 export type RoomError =
   | 'invalid-name'

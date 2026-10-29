@@ -9,6 +9,7 @@ export function codeFromPath(path: string): string | null {
   return isValidCode(code) ? code : null;
 }
 
+export const LEADERBOARD_PATH = '/leaderboard';
 export const invitePath = (code: string) => `/r/${code}`;
 export const inviteUrl = (code: string) => `${window.location.origin}${invitePath(code)}`;
 

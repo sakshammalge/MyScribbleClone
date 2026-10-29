@@ -5,10 +5,19 @@ import { fileURLToPath } from 'node:url';
 import compression from 'compression';
 import express from 'express';
 import { Server } from 'socket.io';
-import type { ClientToServerEvents, ServerToClientEvents } from '@inkling/shared';
+import {
+  DEVICE_ID_HEADER,
+  DEVICE_ID_PATTERN,
+  LEADERBOARD_SORTS,
+  type ClientToServerEvents,
+  type LeaderboardEntry,
+  type LeaderboardSort,
+  type ServerToClientEvents,
+} from '@inkling/shared';
 import { PerIpCounter, clientIp } from './abuse';
-import { socketLimits } from './ratelimit';
+import { RateLimit, socketLimits } from './ratelimit';
 import { RoomManager } from './rooms';
+import { MemoryStats, type StatsStore } from './stats';
 
 const VERSION = '0.1.0';
 const clientDist = resolve(dirname(fileURLToPath(import.meta.url)), '../../client/dist');
@@ -20,6 +29,7 @@ export interface InklingServer {
   http: HttpServer;
   io: Server<ClientToServerEvents, ServerToClientEvents>;
   rooms: RoomManager;
+  stats: StatsStore;
 }
 
 export interface ServerOptions {
@@ -33,13 +43,21 @@ export interface ServerOptions {
   maxRoomsPerIp?: number;
   /** Rooms open across the whole server. */
   maxRooms?: number;
+  /** Where all-time stats are kept; defaults to memory that is lost on restart. */
+  stats?: StatsStore;
+  /** Finished games one device may be credited with per hour (stops self-play farming). */
+  maxCreditedGamesPerHour?: number;
 }
 
 export const DEFAULT_LIMITS = {
   maxConnectionsPerIp: 30,
   maxRoomsPerIp: 6,
   maxRooms: 1000,
+  maxCreditedGamesPerHour: 12,
 };
+
+const LEADERBOARD_SIZE = { default: 50, max: 100 };
+const HOUR_MS = 60 * 60 * 1000;
 
 /** Hashed build output never changes under the same name, so browsers may keep it for a year. */
 const ONE_YEAR = 60 * 60 * 24 * 365;
@@ -63,6 +81,25 @@ export function createInklingServer(options: ServerOptions = {}): InklingServer 
     options.maxConnectionsPerIp ?? DEFAULT_LIMITS.maxConnectionsPerIp,
   );
 
+  const stats = options.stats ?? new MemoryStats();
+  const creditedGames = new Map<string, number[]>();
+  const maxCredited = options.maxCreditedGamesPerHour ?? DEFAULT_LIMITS.maxCreditedGamesPerHour;
+  /** True when the device may still be credited another game this hour (and takes the slot). */
+  const mayCredit = (deviceId: string) => {
+    const now = Date.now();
+    const recent = (creditedGames.get(deviceId) ?? []).filter((t) => now - t < HOUR_MS);
+    if (recent.length >= maxCredited) return false;
+    recent.push(now);
+    creditedGames.set(deviceId, recent);
+    // Forget devices that have gone quiet so the map cannot grow forever.
+    if (creditedGames.size > 5000) {
+      for (const [id, times] of creditedGames) {
+        if (times.every((t) => now - t >= HOUR_MS)) creditedGames.delete(id);
+      }
+    }
+    return true;
+  };
+
   const app = express();
   app.disable('x-powered-by');
   if (trustProxy > 0) app.set('trust proxy', trustProxy);
@@ -81,6 +118,59 @@ export function createInklingServer(options: ServerOptions = {}): InklingServer 
   app.get('/healthz', (_req, res) => {
     res.json({ ok: true, version: VERSION });
   });
+
+  // Stats endpoints: read-only, throttled per address. The device id is a secret, so it travels
+  // in a header, and the leaderboard only ever says which row is "you", never anyone's id.
+  const apiLimits = new Map<string, RateLimit>();
+  app.use('/api', (req, res, next) => {
+    res.setHeader('Cache-Control', 'no-store');
+    const ip = clientIp(
+      { address: req.socket.remoteAddress ?? '', headers: req.headers },
+      trustProxy,
+    );
+    let bucket = apiLimits.get(ip);
+    if (!bucket) {
+      if (apiLimits.size > 5000) apiLimits.clear();
+      bucket = new RateLimit(20, 2);
+      apiLimits.set(ip, bucket);
+    }
+    if (!bucket.take()) return void res.status(429).json({ error: 'rate-limited' });
+    next();
+  });
+  const deviceOf = (header: unknown) =>
+    typeof header === 'string' && DEVICE_ID_PATTERN.test(header) ? header : null;
+  const failed = (res: express.Response, err: unknown) => {
+    console.error(`Stats request failed: ${err instanceof Error ? err.message : String(err)}`);
+    res.status(503).json({ error: 'stats-unavailable' });
+  };
+
+  app.get('/api/leaderboard', (req, res) => {
+    const sort = LEADERBOARD_SORTS.find((s) => s === req.query.sort) ?? 'wins';
+    const asked = Math.floor(Number(req.query.limit));
+    const limit = Math.min(LEADERBOARD_SIZE.max, asked > 0 ? asked : LEADERBOARD_SIZE.default);
+    const me = deviceOf(req.headers[DEVICE_ID_HEADER]);
+    stats
+      .top(sort satisfies LeaderboardSort, limit)
+      .then((rows) => {
+        const entries: LeaderboardEntry[] = rows.map(({ deviceId, ...row }, i) => ({
+          ...row,
+          rank: i + 1,
+          isYou: deviceId === me,
+        }));
+        res.json({ sort, entries });
+      })
+      .catch((err) => failed(res, err));
+  });
+
+  app.get('/api/stats/me', (req, res) => {
+    const me = deviceOf(req.headers[DEVICE_ID_HEADER]);
+    if (!me) return void res.status(400).json({ error: 'bad-device' });
+    stats
+      .get(me)
+      .then((mine) => res.json({ stats: mine }))
+      .catch((err) => failed(res, err));
+  });
+  app.use('/api', (_req, res) => void res.status(404).json({ error: 'not-found' }));
 
   // In production the built client is served from the same origin as the sockets.
   if (clientBuilt) {
@@ -138,6 +228,14 @@ export function createInklingServer(options: ServerOptions = {}): InklingServer 
       },
       private: (socketId, state) => {
         io.to(socketId).emit('game:private', state);
+      },
+      recordGame: (entries) => {
+        const credited = entries.filter((e) => mayCredit(e.deviceId));
+        // Fewer than two creditable devices is not a contest between people.
+        if (credited.length < 2) return;
+        stats.recordGame(credited).catch((err) => {
+          console.error(`Could not save game stats: ${err instanceof Error ? err.message : err}`);
+        });
       },
     },
   );
@@ -331,5 +429,5 @@ export function createInklingServer(options: ServerOptions = {}): InklingServer 
     );
   });
 
-  return { http, io, rooms };
+  return { http, io, rooms, stats };
 }

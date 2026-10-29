@@ -8,7 +8,7 @@ import type {
   RoomSettings,
   RoomState,
 } from '@inkling/shared';
-import { loadSeat, saveProfile, saveSeat } from './session';
+import { getDeviceId, loadSeat, saveProfile, saveSeat } from './session';
 import { socket } from './socket';
 
 /** Errors the client raises itself, beyond what the server reports. */
@@ -128,7 +128,7 @@ export function useRoom(profile: Profile) {
     (p: Profile) => {
       saveProfile(p);
       setBusy(true);
-      socket.emit('room:create', p, adopt);
+      socket.emit('room:create', { ...p, deviceId: getDeviceId() }, adopt);
     },
     [adopt],
   );
@@ -137,7 +137,7 @@ export function useRoom(profile: Profile) {
     (code: string, p: Profile) => {
       saveProfile(p);
       setBusy(true);
-      socket.emit('room:join', { code, profile: p }, adopt);
+      socket.emit('room:join', { code, profile: { ...p, deviceId: getDeviceId() } }, adopt);
     },
     [adopt],
   );

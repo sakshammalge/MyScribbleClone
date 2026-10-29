@@ -1,7 +1,14 @@
-import { AVATAR_COLORS, AVATAR_FACES, cleanName, type Profile } from '@inkling/shared';
+import {
+  AVATAR_COLORS,
+  AVATAR_FACES,
+  DEVICE_ID_PATTERN,
+  cleanName,
+  type Profile,
+} from '@inkling/shared';
 
 const PROFILE_KEY = 'inkling.profile';
 const SEAT_KEY = 'inkling.seat';
+const DEVICE_KEY = 'inkling.device';
 
 export interface Seat {
   code: string;
@@ -48,6 +55,31 @@ export function loadProfile(): Profile {
       face: Number.isInteger(saved.avatar?.face) ? saved.avatar.face : fallback.avatar.face,
     },
   };
+}
+
+let memoryDeviceId: string | null = null;
+
+/**
+ * This browser's all-time identity: 128 random bits made on the first visit and kept in
+ * localStorage. Clearing site data (or switching browser) starts a fresh player.
+ */
+export function getDeviceId(): string {
+  try {
+    const saved = localStorage.getItem(DEVICE_KEY);
+    if (saved && DEVICE_ID_PATTERN.test(saved)) return saved;
+  } catch {
+    // Blocked storage: fall through to an id that lasts as long as this page.
+  }
+  if (!memoryDeviceId) {
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    memoryDeviceId = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  try {
+    localStorage.setItem(DEVICE_KEY, memoryDeviceId);
+  } catch {
+    // Not remembered; stats then follow this page load only.
+  }
+  return memoryDeviceId;
 }
 
 export const saveProfile = (p: Profile) => write(localStorage, PROFILE_KEY, p);
