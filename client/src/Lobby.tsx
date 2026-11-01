@@ -114,7 +114,7 @@ export function Lobby({
           <ul className="roster">
             {room.players.map((p) => (
               <li key={p.id} className="player" data-connected={p.connected}>
-                <Avatar {...p.avatar} size={44} />
+                <Avatar {...p.avatar} size={32} />
                 <span className="player-name">{p.name}</span>
                 {p.id === myId && <span className="badge">you</span>}
                 {p.isHost && <span className="badge host">host</span>}
@@ -124,9 +124,10 @@ export function Lobby({
                     type="button"
                     className="kick"
                     aria-label={`Remove ${p.name}`}
+                    title="Remove"
                     onClick={() => onKick(p.id)}
                   >
-                    Remove
+                    ✕
                   </button>
                 )}
               </li>

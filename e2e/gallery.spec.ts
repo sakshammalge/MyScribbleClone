@@ -61,6 +61,7 @@ test('the gallery shows every drawing, saves PNGs named after the word, and rese
   const words = await playGame(a.page, b.page);
 
   for (const page of [a.page, b.page]) {
+    await page.getByRole('tab', { name: 'Gallery' }).click();
     const cards = page.getByTestId('gallery-card');
     await expect(cards).toHaveCount(4);
     await expect(cards.nth(0)).toContainText(words[0]!);
@@ -105,13 +106,16 @@ test('the gallery shows every drawing, saves PNGs named after the word, and rese
 
   // A refresh (reconnect) still shows every drawing.
   await b.page.reload();
+  await b.page.getByRole('tab', { name: 'Gallery' }).click();
   await expect(b.page.getByTestId('gallery-card')).toHaveCount(4);
 
   // A player joining after the game ended sees them too.
   const c = await player(browser);
   await enter(c.page, 'Cy', code);
+  await c.page.getByRole('tab', { name: 'Gallery' }).click();
   await expect(c.page.getByTestId('gallery-card')).toHaveCount(4);
 
+  await a.page.getByRole('tab', { name: 'Scores' }).click();
   await a.page.getByRole('button', { name: 'Play again' }).click();
   await expect(a.page.getByTestId('standings')).toHaveCount(0);
   await expect(a.page.getByTestId('gallery')).toHaveCount(0);
@@ -126,6 +130,7 @@ test('with reduced motion the carousel stays put and can be scrolled by hand', a
   const code = await enter(a.page, 'Ada');
   await enter(b.page, 'Bo', code);
   await playGame(a.page, b.page);
+  await a.page.getByRole('tab', { name: 'Gallery' }).click();
   const track = a.page.locator('.gallery-track');
   await expect(track).toBeVisible();
   await track.evaluate((el) => (el.style.maxWidth = '300px'));
