@@ -15,8 +15,9 @@ import {
 import type { GameEntry } from './stats';
 import { WORD_TIERS } from './wordlist';
 import {
-  AVATAR_COLORS,
-  AVATAR_FACES,
+  AVATAR_PARTS,
+  AVATAR_PART_KEYS,
+  type AvatarPart,
   DEVICE_ID_PATTERN,
   ROOM_CODE_ALPHABET,
   ROOM_CODE_LENGTH,
@@ -138,7 +139,9 @@ const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(mi
 function cleanAvatar(a: Profile['avatar'] | undefined): Profile['avatar'] {
   const pick = (v: unknown, size: number) =>
     typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < size ? v : randomInt(size);
-  return { color: pick(a?.color, AVATAR_COLORS), face: pick(a?.face, AVATAR_FACES) };
+  const out = {} as Record<AvatarPart, number>;
+  for (const key of AVATAR_PART_KEYS) out[key] = pick(a?.[key], AVATAR_PARTS[key]);
+  return out;
 }
 
 /**
