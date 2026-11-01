@@ -286,6 +286,7 @@ test('the pen moves on when the drawer walks out mid-turn', async ({ browser }) 
   const [ada, bo, cy] = players as [Player, Player, Player];
   await host.page.getByRole('button', { name: 'Start game' }).click();
   const word = await pick(ada);
+  await ada.page.getByRole('button', { name: 'Menu' }).click();
   await ada.page.getByRole('button', { name: 'Leave room' }).click();
   await expect(bo.page.getByTestId('reveal')).toContainText(word);
   await expect(log(cy)).toContainText('Ada left the room.');

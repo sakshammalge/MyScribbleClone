@@ -192,7 +192,11 @@ test('back to lobby wipes the board for the next round', async ({ browser }) => 
   await drag(host.page, [0.2, 0.5], [0.8, 0.5]);
   await expect.poll(() => pixel(guest.page, 0.5, 0.5)).toEqual(INK);
 
+  // Only the host's menu offers it.
+  await guest.page.getByRole('button', { name: 'Menu' }).click();
+  await expect(guest.page.getByRole('button', { name: 'Leave room' })).toBeVisible();
   await expect(guest.page.getByRole('button', { name: 'Back to lobby' })).toHaveCount(0);
+  await host.page.getByRole('button', { name: 'Menu' }).click();
   await host.page.getByRole('button', { name: 'Back to lobby' }).click();
   await expect(guest.page.getByRole('button', { name: 'Start game' })).toBeVisible();
   await host.page.getByRole('button', { name: 'Start game' }).click();

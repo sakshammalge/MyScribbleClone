@@ -21,11 +21,13 @@ interface BoardProps {
   drawerName: string;
   /** What to say under the sheet when the viewer is not holding the pen. */
   note: string;
+  /** Replaces the note under the sheet for viewers, e.g. the end-of-game view switch. */
+  below?: ReactNode;
   /** Laid over the paper, e.g. the word picker or the end-of-turn scores. */
   children?: ReactNode;
 }
 
-export function Board({ canDraw, drawerName, note, children }: BoardProps) {
+export function Board({ canDraw, drawerName, note, below, children }: BoardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const surface = useRef<Surface | null>(null);
@@ -249,31 +251,35 @@ export function Board({ canDraw, drawerName, note, children }: BoardProps) {
         {canDraw && <div ref={cursorRef} className="brush-ring" data-tool={tool} hidden />}
         {children}
       </div>
-      {canDraw ? (
-        <Toolbar
-          tool={tool}
-          color={color}
-          size={size}
-          filled={filled}
-          onFilled={setFilled}
-          canUndo={ops > 0}
-          onTool={setTool}
-          onColor={(c) => {
-            setColor(c);
-            if (tool === 'eraser') setTool('brush');
-          }}
-          onSize={setSize}
-          onUndo={() => send({ t: 'undo' })}
-          onClear={() => send({ t: 'clear' })}
-        />
-      ) : (
-        <p className="watching" role="status">
-          <span className="pencil" aria-hidden="true">
-            ✎
-          </span>
-          {note}
-        </p>
-      )}
+      <div className="dock">
+        {canDraw ? (
+          <Toolbar
+            tool={tool}
+            color={color}
+            size={size}
+            filled={filled}
+            onFilled={setFilled}
+            canUndo={ops > 0}
+            onTool={setTool}
+            onColor={(c) => {
+              setColor(c);
+              if (tool === 'eraser') setTool('brush');
+            }}
+            onSize={setSize}
+            onUndo={() => send({ t: 'undo' })}
+            onClear={() => send({ t: 'clear' })}
+          />
+        ) : (
+          (below ?? (
+            <p className="watching" role="status">
+              <span className="pencil" aria-hidden="true">
+                ✎
+              </span>
+              {note}
+            </p>
+          ))
+        )}
+      </div>
     </div>
   );
 }

@@ -24,6 +24,18 @@
   --color-good: #1f9d8a;
   --color-bad: #d6455d;
   --shadow-card: 0 2px 0 var(--color-border), 0 10px 30px rgb(30 26 66 / 8%);
+
+  /* The sheet is paper in both themes, so its colours do not change with the palette. */
+  --color-on-highlight: #1e1a42;
+  --color-paper: #ffffff;
+  --color-paper-ink: #1e1a42;
+  --color-paper-row: #f6f1e7;
+  --color-veil: rgb(255 253 248 / 94%);
+  --color-on-good: #ffffff;
+  --color-podium-1: var(--color-highlight);
+  --color-podium-2: #c9d4e6;
+  --color-podium-3: #efc9a6;
+  --color-podium-4: #d9d3e8;
 }
 
 @media (prefers-color-scheme: dark) {

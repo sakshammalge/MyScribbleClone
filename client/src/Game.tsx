@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import {
   APP_NAME,
   rankPlayers,
@@ -10,8 +11,8 @@ import { Avatar } from './Avatar';
 import { Board } from './canvas/Board';
 import { Chat } from './Chat';
 import { useCountdown } from './clock';
-import { Reactions } from './Emotes';
 import { Gallery } from './Gallery';
+import { GameMenu } from './GameMenu';
 
 interface GameProps {
   room: RoomState;
@@ -36,7 +37,7 @@ const PHASE_LABEL: Record<RoomState['phase'], string> = {
 
 const TIER_LABELS = ['easy', 'medium', 'hard'] as const;
 
-/** The studio: players and reactions on the left, the sheet in the middle, notes on the right. */
+/** The studio: one top bar, then players, the sheet with its pencil case, and the chat. */
 
 export function Game({
   room,
@@ -50,6 +51,7 @@ export function Game({
   onChoose,
   onChat,
 }: GameProps) {
+  const [endView, setEndView] = useState<'scores' | 'gallery'>('scores');
   const me = room.players.find((p) => p.id === myId);
   const drawer = room.players.find((p) => p.id === room.drawerId);
   const isDrawer = room.drawerId === myId;
@@ -69,9 +71,12 @@ export function Game({
           : 'Thanks for playing!';
 
   return (
-    <main className="studio">
-      <header className="studio-bar">
-        <h1>{APP_NAME}</h1>
+    <main className="studio" data-phase={room.phase} data-role={isDrawer ? 'drawer' : 'guest'}>
+      <header className="studio-bar" data-phase={room.phase}>
+        <span className="logo">
+          <img src="/logo.svg" alt="" width="24" height="24" />
+          <h1>{APP_NAME}</h1>
+        </span>
         <span className="chip" aria-label={`Room ${room.code}`}>
           {room.code}
         </span>
@@ -80,42 +85,62 @@ export function Game({
             Round {room.round} of {room.settings.rounds}
           </span>
         )}
-        <span className="spacer" />
-        {me?.isHost && (
-          <button type="button" className="link" onClick={onLobby}>
-            Back to lobby
-          </button>
+        <WordSlip room={room} word={secrets.word} isDrawer={isDrawer} />
+        {room.phaseEndsAt !== null ? (
+          <span className="timer" data-testid="timer" role="timer" aria-label="Seconds left">
+            {seconds}
+          </span>
+        ) : (
+          <span className="timer" aria-hidden="true" />
         )}
-        <button type="button" className="link" onClick={onLeave}>
-          Leave room
-        </button>
+        <GameMenu isHost={!!me?.isHost} onLobby={onLobby} onLeave={onLeave} />
+        <span className="ink-meter" aria-hidden="true">
+          <span style={{ transform: `scaleX(${room.phaseEndsAt === null ? 0 : fraction})` }} />
+        </span>
       </header>
 
       <aside className="rail" aria-label="Players">
+        <div className="panel-head">
+          <h2>Players</h2>
+          <span className="count">
+            {room.players.length} / {room.settings.maxPlayers}
+          </span>
+        </div>
         <ol>
-          {ranked.map(({ player: p, place }) => (
-            <li
-              key={p.id}
-              className="rail-player"
-              data-drawing={p.id === room.drawerId}
-              data-guessed={p.guessed}
-              data-connected={p.connected}
-            >
-              <Avatar {...p.avatar} size={40} />
-              <span className="player-name">{p.name}</span>
-              <span className="score-cell">
-                <span className="score" data-testid={`score-${p.name}`}>
-                  {p.score}
+          {ranked.map(({ player: p, place }) => {
+            const kickable = !!me?.isHost && p.id !== myId && room.phase !== 'ended';
+            const guessed = p.guessed && room.phase === 'drawing';
+            const drawing = p.id === room.drawerId && room.phase !== 'ended';
+            return (
+              <li
+                key={p.id}
+                className="prow"
+                title={p.name}
+                data-drawing={drawing}
+                data-guessed={guessed}
+                data-connected={p.connected}
+                data-me={p.id === myId}
+                data-kickable={kickable}
+              >
+                <span className="rank">{place}</span>
+                <Avatar {...p.avatar} size={28} />
+                <span className="pname">
+                  <span className="pname-text">{p.name}</span>
+                  {p.id === myId && <span className="you"> (you)</span>}
                 </span>
-                {!!gains?.[p.id] && (
-                  <span className="gain" data-testid={`gain-${p.name}`}>
-                    +{gains[p.id]}
+                {drawing && <PencilIcon />}
+                {guessed && <CheckIcon />}
+                <span className="score-cell">
+                  {!!gains?.[p.id] && (
+                    <span className="gain" data-testid={`gain-${p.name}`}>
+                      +{gains[p.id]}
+                    </span>
+                  )}
+                  <span className="score" data-testid={`score-${p.name}`}>
+                    {p.score}
                   </span>
-                )}
-              </span>
-              <span className="rail-tags">
-                <span className="place">#{place}</span>
-                {me?.isHost && p.id !== myId && room.phase !== 'ended' && (
+                </span>
+                {kickable && (
                   <button
                     type="button"
                     className="kick"
@@ -125,32 +150,37 @@ export function Game({
                     ✕
                   </button>
                 )}
-                {p.id === myId && <span className="badge">you</span>}
-                {p.id === room.drawerId && room.phase !== 'ended' && (
-                  <span className="badge pen">drawing</span>
-                )}
-                {p.guessed && room.phase === 'drawing' && <span className="badge ok">got it</span>}
-              </span>
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ol>
       </aside>
 
       <section className="stage" aria-label="Canvas">
-        <div className="clockbar" data-phase={room.phase}>
-          <span className="phase">{PHASE_LABEL[room.phase]}</span>
-          <WordSlip room={room} word={secrets.word} isDrawer={isDrawer} />
-          {room.phaseEndsAt !== null && (
-            <span className="timer" data-testid="timer" role="timer" aria-label="Seconds left">
-              {seconds}
-            </span>
-          )}
-          <span className="ink-meter" aria-hidden="true">
-            <span style={{ transform: `scaleX(${room.phaseEndsAt === null ? 0 : fraction})` }} />
-          </span>
-        </div>
-
-        <Board key={room.turn} canDraw={canDraw} drawerName={drawerName} note={note}>
+        <Board
+          key={room.turn}
+          canDraw={canDraw}
+          drawerName={drawerName}
+          note={note}
+          below={
+            room.phase === 'ended' ? (
+              <div className="view-tabs" role="tablist" aria-label="End of game">
+                {(['scores', 'gallery'] as const).map((view) => (
+                  <button
+                    key={view}
+                    type="button"
+                    role="tab"
+                    className="tab"
+                    aria-selected={endView === view}
+                    onClick={() => setEndView(view)}
+                  >
+                    {view === 'scores' ? 'Scores' : 'Gallery'}
+                  </button>
+                ))}
+              </div>
+            ) : undefined
+          }
+        >
           {room.phase === 'choosing' && (
             <div className="veil" data-testid="choosing">
               {isDrawer && secrets.choices ? (
@@ -181,7 +211,7 @@ export function Game({
               <TurnResults room={room} reveal={room.reveal} />
             </div>
           )}
-          {room.phase === 'ended' && (
+          {room.phase === 'ended' && endView === 'scores' && (
             <div className="veil" data-testid="standings">
               <p className="veil-note">Game over</p>
               <Podium ranked={ranked} myId={myId} />
@@ -199,26 +229,57 @@ export function Game({
               )}
             </div>
           )}
+          {room.phase === 'ended' && endView === 'gallery' && (
+            <div className="veil veil-gallery">
+              <Gallery />
+            </div>
+          )}
         </Board>
-        {room.phase === 'ended' && <Gallery />}
       </section>
 
-      <Reactions />
-
-      <aside className="margin">
-        <Chat
-          messages={chat}
-          onSend={onChat}
-          placeholder={
-            room.phase === 'drawing' && !isDrawer && !me?.guessed
-              ? 'Type your guess…'
-              : room.phase === 'drawing'
-                ? 'Chat with others who know…'
-                : 'Say something…'
-          }
-        />
-      </aside>
+      <Chat
+        reactions
+        messages={chat}
+        onSend={onChat}
+        placeholder={
+          room.phase === 'drawing' && !isDrawer && !me?.guessed
+            ? 'Type your guess…'
+            : room.phase === 'drawing'
+              ? 'Chat with insiders…'
+              : 'Say something…'
+        }
+      />
     </main>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg className="status-ico" viewBox="0 0 24 24" role="img" aria-label="drawing">
+      <path
+        d="M4 20l1-5L16 4l4 4L9 19zM14 6l4 4"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg className="status-ico" viewBox="0 0 24 24" role="img" aria-label="guessed it">
+      <path
+        d="M5 13l4 4L19 7"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
@@ -232,7 +293,9 @@ function WordSlip({
   word: string | null;
   isDrawer: boolean;
 }) {
-  if (room.phase !== 'drawing') return <span className="slip-gap" />;
+  if (room.phase !== 'drawing') {
+    return <span className="phase">{PHASE_LABEL[room.phase]}</span>;
+  }
   if (isDrawer && word) {
     return (
       <span className="slip" data-testid="secret-word">

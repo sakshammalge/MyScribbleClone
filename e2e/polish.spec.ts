@@ -118,11 +118,11 @@ test.describe('room code', () => {
 
 test.describe('reactions and canvas on laptop screens', () => {
   const sizes = [
-    { width: 1280, height: 720, min: 580 },
-    { width: 1366, height: 768, min: 640 },
-    { width: 1440, height: 900, min: 800 },
-    { width: 1536, height: 864, min: 760 },
-    { width: 1920, height: 1080, min: 1000 },
+    { width: 1280, height: 720, min: 730 },
+    { width: 1366, height: 768, min: 800 },
+    { width: 1440, height: 900, min: 870 },
+    { width: 1536, height: 864, min: 800 },
+    { width: 1920, height: 1080, min: 1200 },
   ];
 
   test('floating reactions stay out of the drawing, and the sheet fits without scrolling', async ({
@@ -155,14 +155,13 @@ test.describe('reactions and canvas on laptop screens', () => {
     const float = h.page.getByTestId('emote-float').first();
     await expect(float).toBeVisible();
     const canvasBox = (await h.page.getByTestId('drawing-canvas').boundingBox())!;
-    const panel = (await h.page
-      .getByRole('complementary', { name: 'Reactions panel' })
-      .boundingBox())!;
-    expect(panel.x + panel.width).toBeLessThanOrEqual(canvasBox.x);
+    // The reactions live in the chat panel, which sits beside the sheet.
+    const panel = (await h.page.getByRole('region', { name: 'Chat' }).boundingBox())!;
+    expect(canvasBox.x + canvasBox.width).toBeLessThanOrEqual(panel.x);
     for (let i = 0; i < 6; i++) {
       const f = await float.boundingBox().catch(() => null);
       if (f) {
-        expect(f.x + f.width).toBeLessThanOrEqual(canvasBox.x + 1);
+        expect(f.x).toBeGreaterThanOrEqual(canvasBox.x + canvasBox.width);
         expect(f.x).toBeGreaterThanOrEqual(panel.x - 1);
       }
       await h.page.waitForTimeout(150);
