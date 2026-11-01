@@ -3,11 +3,12 @@ import { useTheme } from './useTheme';
 
 interface GameMenuProps {
   isHost: boolean;
-  onLobby: () => void;
+  /** Only the game screen has a way back to the lobby. */
+  onLobby?: () => void;
   onLeave: () => void;
 }
 
-/** The ⋯ button in the top bar: back to lobby (host), dark mode, leave. Closes on outside click or Escape. */
+/** The ⋯ button in the top bar: back to lobby (host, in a game), dark mode, leave. Closes on outside click or Escape. */
 export function GameMenu({ isHost, onLobby, onLeave }: GameMenuProps) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
@@ -52,13 +53,13 @@ export function GameMenu({ isHost, onLobby, onLeave }: GameMenuProps) {
       </button>
       {open && (
         <div className="menu-panel" id="game-menu">
-          {isHost && (
+          {isHost && onLobby && (
             <button
               type="button"
               className="menu-item"
               onClick={() => {
                 setOpen(false);
-                onLobby();
+                onLobby?.();
               }}
             >
               Back to lobby

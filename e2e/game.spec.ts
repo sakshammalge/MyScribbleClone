@@ -228,7 +228,11 @@ test('plays every round to the final standings, then the host can play again', a
 test('the host’s own words can replace the built-in list', async ({ browser }) => {
   const { players, host } = await lobby(browser, 'Ada', 'Bo');
   const [ada, bo] = players as [Player, Player];
-  await expect(bo.page.getByTestId('custom-count')).toHaveText('0');
+  // Guests see no words card until the host has added some.
+  await expect(bo.page.getByTestId('custom-count')).toHaveCount(0);
+  // Short windows start with the words box folded.
+  const fold = host.page.getByRole('button', { name: /Your own words/ });
+  if ((await fold.getAttribute('aria-expanded')) === 'false') await fold.click();
   await host.page
     .getByRole('textbox', { name: 'Custom words' })
     .fill('zebra crossing\nnebula, tea pot\n  Nebula ');

@@ -4,6 +4,7 @@ import { App } from './App';
 import './styles/tokens.css';
 import './styles/app.css';
 import './styles/studio.css';
+import './styles/lobby.css';
 import { initTheme } from './theme';
 
 initTheme();
