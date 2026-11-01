@@ -4,7 +4,7 @@ import { Home } from './Home';
 import { Leaderboard } from './Leaderboard';
 import { Lobby } from './Lobby';
 import { LEADERBOARD_PATH, codeFromPath, invitePath, usePath } from './route';
-import { loadProfile } from './session';
+import { loadProfile, saveProfile } from './session';
 import { useConnection } from './useConnection';
 import { useRoom } from './useRoom';
 
@@ -31,6 +31,8 @@ export function App() {
     chat,
     clearError,
   } = useRoom(profile);
+  // Name and face are remembered for the next visit.
+  useEffect(() => saveProfile(profile), [profile]);
   const inviteCode = codeFromPath(path);
   const roomCode = room?.code;
 

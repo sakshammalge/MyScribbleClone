@@ -57,9 +57,33 @@ export type RoomSettings = {
   -readonly [K in keyof typeof SETTINGS_LIMITS]: number;
 };
 
+/** How many choices each avatar part has. Every field of an avatar is an index below its size. */
+export const AVATAR_PARTS = {
+  color: AVATAR_COLORS,
+  face: AVATAR_FACES,
+  skin: 10,
+  hair: 12,
+  hairColor: 10,
+  eyes: 6,
+  brows: 4,
+  beard: 4,
+  accessory: 7,
+} as const;
+
+export type AvatarPart = keyof typeof AVATAR_PARTS;
+export const AVATAR_PART_KEYS = Object.keys(AVATAR_PARTS) as AvatarPart[];
+
+/** `color` is the backdrop and `face` the mouth; the rest are optional so older clients still join. */
 export interface Avatar {
   color: number;
   face: number;
+  skin?: number;
+  hair?: number;
+  hairColor?: number;
+  eyes?: number;
+  brows?: number;
+  beard?: number;
+  accessory?: number;
 }
 
 export interface PlayerInfo {

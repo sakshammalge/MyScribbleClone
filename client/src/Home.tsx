@@ -1,15 +1,13 @@
 import { useState, type FormEvent } from 'react';
 import {
   APP_NAME,
-  AVATAR_COLORS,
-  AVATAR_FACES,
   NAME_MAX_LENGTH,
   ROOM_CODE_LENGTH,
   isValidCode,
   normalizeCode,
   type Profile,
 } from '@inkling/shared';
-import { Avatar } from './Avatar';
+import { AvatarEditor } from './AvatarEditor';
 import { useTheme } from './useTheme';
 import { ERROR_TEXT, type ClientError } from './useRoom';
 
@@ -52,15 +50,6 @@ export function Home({
     else onCreate();
   };
 
-  const cycleFace = (dir: 1 | -1) =>
-    onProfile({
-      ...profile,
-      avatar: {
-        ...profile.avatar,
-        face: (profile.avatar.face + dir + AVATAR_FACES) % AVATAR_FACES,
-      },
-    });
-
   return (
     <main className="shell">
       <button
@@ -91,39 +80,10 @@ export function Home({
 
         <fieldset className="who">
           <legend>Who are you?</legend>
-          <div className="who-row">
-            <button
-              type="button"
-              className="ghost"
-              aria-label="Previous face"
-              onClick={() => cycleFace(-1)}
-            >
-              ‹
-            </button>
-            <Avatar {...profile.avatar} size={96} />
-            <button
-              type="button"
-              className="ghost"
-              aria-label="Next face"
-              onClick={() => cycleFace(1)}
-            >
-              ›
-            </button>
-          </div>
-          <div className="swatches" role="radiogroup" aria-label="Ink colour">
-            {Array.from({ length: AVATAR_COLORS }, (_, i) => (
-              <button
-                key={i}
-                type="button"
-                role="radio"
-                aria-checked={profile.avatar.color === i}
-                aria-label={`Colour ${i + 1}`}
-                className="swatch"
-                style={{ background: `var(--avatar-${i})` }}
-                onClick={() => onProfile({ ...profile, avatar: { ...profile.avatar, color: i } })}
-              />
-            ))}
-          </div>
+          <AvatarEditor
+            avatar={profile.avatar}
+            onChange={(avatar) => onProfile({ ...profile, avatar })}
+          />
           <label className="field">
             <span>Your name</span>
             <input
