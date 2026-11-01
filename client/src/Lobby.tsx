@@ -50,7 +50,7 @@ export function Lobby({
   const isHost = me?.isHost ?? false;
   // The host's words box starts folded on short desktop windows, where there is no room for it.
   const [wordsOpen, setWordsOpen] = useState(
-    () => !(isHost && window.matchMedia('(min-width: 1024px) and (max-height: 740px)').matches),
+    () => !(isHost && window.matchMedia('(min-width: 1024px) and (max-height: 820px)').matches),
   );
   const link = inviteUrl(room.code);
   const hostName = room.players.find((p) => p.isHost)?.name ?? 'the host';
@@ -215,92 +215,91 @@ export function Lobby({
               );
             })}
             {!isHost && <p className="muted">Only the host can change these.</p>}
-          </section>
-
-          <section className="panel words" aria-label="Custom words" data-open={wordsOpen}>
-            <button
-              type="button"
-              className="panel-title fold"
-              aria-expanded={wordsOpen}
-              aria-controls="words-body"
-              onClick={() => setWordsOpen((v) => !v)}
-            >
-              <h2>Your own words</h2>
-              <span className="count" data-testid="custom-count">
-                {room.customWordCount}
-              </span>
-              <svg className="chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-                <path
-                  d="M6 9l6 6 6-6"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            <div className="words-body" id="words-body" hidden={!wordsOpen}>
-              {isHost ? (
-                <>
-                  <label className="field">
-                    One per line, or separated by commas
-                    <textarea
-                      aria-label="Custom words"
-                      rows={3}
-                      value={draft}
-                      maxLength={CUSTOM_WORDS.maxWords * (CUSTOM_WORDS.maxLength + 1)}
-                      placeholder={'inside joke\nour office dog\nthat one meeting'}
-                      onChange={(e) => setDraft(e.target.value)}
-                    />
-                  </label>
-                  <div className="words-actions">
-                    <label className="check">
-                      <input
-                        type="checkbox"
-                        checked={only}
-                        onChange={(e) => setOnly(e.target.checked)}
-                      />
-                      Use only my words
-                    </label>
-                    <button type="button" className="btn secondary" onClick={saveWords}>
-                      Save words
-                    </button>
-                  </div>
-                  <p className="muted">
-                    Mixed in with the built-in list unless you tick the box. Players never see them
-                    until they come up.
-                  </p>
-                </>
-              ) : (
-                <p className="muted">
-                  {room.customWordCount === 0
-                    ? 'The host has not added any words of their own.'
-                    : room.customWordsOnly
-                      ? `The game will use only the host’s ${room.customWordCount} words.`
-                      : `${room.customWordCount} of the host’s words are mixed in.`}
-                </p>
-              )}
+            <div className="start">
+              <button
+                type="button"
+                className="btn"
+                disabled={!isHost || room.players.length < 2}
+                onClick={onStart}
+              >
+                Start game
+              </button>
+              <p className="muted">
+                {room.players.length < 2
+                  ? 'Waiting for at least one more player…'
+                  : isHost
+                    ? 'Everyone is in. Start when you are ready.'
+                    : `Waiting for ${hostName} to start…`}
+              </p>
             </div>
           </section>
 
-          <div className="start">
-            <button
-              type="button"
-              className="btn"
-              disabled={!isHost || room.players.length < 2}
-              onClick={onStart}
-            >
-              Start game
-            </button>
-            <p className="muted">
-              {room.players.length < 2
-                ? 'Waiting for at least one more player…'
-                : isHost
-                  ? 'Everyone is in. Start when you are ready.'
-                  : `Waiting for ${hostName} to start…`}
-            </p>
-          </div>
+          {(isHost || room.customWordCount > 0) && (
+            <section className="panel words" aria-label="Custom words" data-open={wordsOpen}>
+              <button
+                type="button"
+                className="panel-title fold"
+                aria-expanded={wordsOpen}
+                aria-controls="words-body"
+                onClick={() => setWordsOpen((v) => !v)}
+              >
+                <h2>Your own words</h2>
+                <span className="count" data-testid="custom-count">
+                  {room.customWordCount}
+                </span>
+                <svg className="chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                  <path
+                    d="M6 9l6 6 6-6"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+              <div className="words-body" id="words-body" hidden={!wordsOpen}>
+                {isHost ? (
+                  <>
+                    <label className="field">
+                      One per line, or separated by commas
+                      <textarea
+                        aria-label="Custom words"
+                        rows={4}
+                        value={draft}
+                        maxLength={CUSTOM_WORDS.maxWords * (CUSTOM_WORDS.maxLength + 1)}
+                        placeholder={'inside joke\nour office dog\nthat one meeting'}
+                        onChange={(e) => setDraft(e.target.value)}
+                      />
+                    </label>
+                    <div className="words-actions">
+                      <label className="check">
+                        <input
+                          type="checkbox"
+                          checked={only}
+                          onChange={(e) => setOnly(e.target.checked)}
+                        />
+                        Use only my words
+                      </label>
+                      <button type="button" className="btn secondary" onClick={saveWords}>
+                        Save words
+                      </button>
+                    </div>
+                    <p className="muted">
+                      Mixed in with the built-in list unless you tick the box. Players never see
+                      them until they come up.
+                    </p>
+                  </>
+                ) : (
+                  <p className="muted">
+                    {room.customWordsOnly
+                      ? `The game will use only the host’s ${room.customWordCount} words.`
+                      : `The host added ${room.customWordCount} ${room.customWordCount === 1 ? 'word' : 'words'}.`}
+                  </p>
+                )}
+              </div>
+            </section>
+          )}
         </aside>
       </div>
     </main>

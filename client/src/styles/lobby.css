@@ -454,7 +454,9 @@
 }
 
 .words textarea {
-  resize: none;
+  resize: vertical;
+  min-height: 5.5rem;
+  max-height: 11rem;
   padding: 8px 12px;
 }
 
@@ -474,6 +476,7 @@
   flex: none;
   display: grid;
   gap: 8px;
+  margin-top: 6px;
   text-align: center;
 }
 
@@ -596,39 +599,5 @@
 
   .side {
     grid-area: side;
-  }
-
-  .words {
-    flex: 0 1 auto;
-  }
-
-  .words[data-open='true'] {
-    flex: 1 1 auto;
-  }
-
-  .words[data-open='true'] .words-body {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .words-body > * {
-    flex: none;
-  }
-
-  .words-body > .field {
-    flex: 1 1 auto;
-    min-height: 92px;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .words-body textarea {
-    flex: 1;
-    min-height: 0;
-  }
-
-  .start {
-    margin-top: auto;
   }
 }

@@ -103,6 +103,8 @@ test('the words box folds away, and the menu holds Leave room', async ({ browser
   const room = await openRoom(browser, 1);
   const fold = room.host.getByRole('button', { name: /Your own words/ });
   await room.host.setViewportSize({ width: 1512, height: 982 });
+  // Windows under about 820px high start with it folded.
+  if ((await fold.getAttribute('aria-expanded')) === 'false') await fold.click();
   await expect(fold).toHaveAttribute('aria-expanded', 'true');
   await expect(room.host.getByRole('textbox', { name: 'Custom words' })).toBeVisible();
   await fold.click();
