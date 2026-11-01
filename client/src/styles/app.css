@@ -447,7 +447,8 @@ body {
   padding: var(--space-3);
   display: grid;
   grid-template-columns: 210px minmax(0, 1fr) 280px;
-  grid-template-areas: 'bar bar bar' 'rail stage margin';
+  grid-template-areas: 'bar bar bar' 'rail stage margin' 'reactions stage margin';
+  grid-template-rows: auto auto 1fr;
   gap: var(--space-3) var(--space-4);
   align-items: start;
 }
@@ -539,18 +540,32 @@ body {
   position: relative;
 }
 
+/* Reactions live in their own panel under the players, never over the drawing. */
+.reactions {
+  grid-area: reactions;
+  align-self: start;
+  position: relative;
+  /* The top part is the lane the floating emotes rise through. */
+  padding: 92px var(--space-2) var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
 .emote-bar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  justify-items: center;
   gap: var(--space-1);
-  margin-top: var(--space-3);
 }
 
 .emote-btn {
-  width: 44px;
-  height: 44px;
-  font-size: 1.4rem;
+  width: 100%;
+  max-width: 40px;
+  aspect-ratio: 1;
+  padding: 0;
+  font-size: 1.3rem;
   line-height: 1;
   border: 2px solid var(--color-border);
   border-radius: 50%;
@@ -575,22 +590,23 @@ body {
 .emote-layer {
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   overflow: hidden;
   pointer-events: none;
-  z-index: 4;
 }
 
 .emote-float {
   position: absolute;
   left: var(--x);
-  bottom: 0;
+  bottom: 56px;
   display: grid;
   justify-items: center;
+  --rise: 70px;
   animation: emote-rise 2.6s ease-out forwards;
 }
 
 .emote-glyph {
-  font-size: 2.6rem;
+  font-size: 2rem;
   line-height: 1;
   filter: drop-shadow(0 3px 4px rgb(0 0 0 / 25%));
   animation: emote-wobble 0.9s ease-in-out infinite alternate;
@@ -617,14 +633,14 @@ body {
   }
   12% {
     opacity: 1;
-    transform: translate(0, -40px) scale(1.25);
+    transform: translate(0, -12px) scale(1.2);
   }
   25% {
-    transform: translate(0, -80px) scale(1);
+    transform: translate(0, -24px) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translate(var(--sway), -340px) scale(0.9);
+    transform: translate(var(--sway), calc(var(--rise) * -1)) scale(0.9);
   }
 }
 
@@ -641,7 +657,7 @@ body {
   .emote-float {
     animation-duration: 1.6s;
     animation-name: emote-fade;
-    bottom: 40%;
+    bottom: 56px;
   }
 
   .emote-glyph {
@@ -819,14 +835,16 @@ body {
 @media (max-width: 1100px) {
   .studio {
     grid-template-columns: 210px minmax(0, 1fr);
-    grid-template-areas: 'bar bar' 'rail stage' 'rail margin';
+    grid-template-areas: 'bar bar' 'rail stage' 'reactions stage' 'margin margin';
+    grid-template-rows: auto auto 1fr auto;
   }
 }
 
 @media (max-width: 860px) {
   .studio {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: 'bar' 'rail' 'stage' 'margin';
+    grid-template-areas: 'bar' 'rail' 'stage' 'reactions' 'margin';
+    grid-template-rows: none;
   }
 
   .rail {
@@ -1585,4 +1603,128 @@ body {
   background: var(--color-accent);
   color: var(--color-accent-ink);
   font-size: 0.75rem;
+}
+
+/*
+ * Laptops: give the sheet as much of the window as it can take. The side panels slim down, the
+ * pencil case and clock bar tighten, and the sheet is sized from what is left of the height
+ * (--chrome is everything above and below it) so it never forces the page to scroll.
+ */
+.sheet {
+  width: min(100%, calc((100dvh - var(--chrome, 330px)) * 4 / 3));
+}
+
+@media (min-width: 861px) and (max-width: 1500px) {
+  .studio {
+    grid-template-columns: 180px minmax(0, 1fr) 250px;
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .notes {
+    height: min(560px, calc(100dvh - 120px));
+  }
+}
+
+@media (min-width: 861px) and (max-width: 1100px) {
+  .studio {
+    grid-template-columns: 180px minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 861px) {
+  .studio {
+    --chrome: 270px;
+  }
+
+  .clockbar {
+    margin-bottom: var(--space-2);
+    padding: 6px var(--space-3);
+  }
+
+  .board {
+    gap: var(--space-2);
+  }
+
+  .case {
+    gap: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-3);
+  }
+
+  .tool,
+  .size {
+    height: 36px;
+    min-width: 36px;
+  }
+
+  .swatches {
+    grid-template-columns: repeat(10, 24px);
+  }
+
+  .swatch {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+@media (max-width: 860px) {
+  .reactions {
+    padding-top: 64px;
+  }
+
+  .emote-float {
+    --rise: 40px;
+  }
+}
+
+/* Dark mode switch, top corner of the home page. */
+.theme-toggle {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 14px;
+  border: 2px solid var(--color-border);
+  border-radius: 99px;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.theme-toggle:focus-visible {
+  outline: 3px solid var(--color-highlight);
+  outline-offset: 2px;
+}
+
+/* The room code and invite link are shown to be shared, never typed into. */
+.code-tiles,
+.chip {
+  user-select: all;
+  cursor: default;
+}
+
+.link-box[readonly] {
+  color: var(--color-ink-muted);
+  cursor: default;
+}
+
+/* Watchers have no pencil case under the sheet, so the sheet can use that height too. */
+@media (min-width: 861px) {
+  .sheet[data-can-draw='false'] {
+    width: min(100%, calc((100dvh - 200px) * 4 / 3));
+  }
+}
+
+.reactions::before {
+  content: 'Reactions';
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-3);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-ink-muted);
 }
