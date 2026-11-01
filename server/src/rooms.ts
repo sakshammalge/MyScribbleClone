@@ -607,7 +607,7 @@ export class RoomManager {
         customOnly: room.customOnly,
         used: room.used,
       },
-      TURN_TIMING.wordChoices,
+      room.settings.wordChoices,
     );
     room.phase = 'choosing';
     this.run(room, TURN_TIMING.chooseSec, () => {

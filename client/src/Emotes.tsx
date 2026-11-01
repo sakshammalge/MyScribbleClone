@@ -4,8 +4,8 @@ import { socket } from './socket';
 
 const LIVE_MAX = 14;
 
-/** Reactions drift up over the sheet for a moment, then are gone; nothing is stored. */
-export function EmoteLayer() {
+/** Reactions drift up beside the sheet for a moment, then are gone; nothing is stored. */
+function EmoteLayer() {
   const [live, setLive] = useState<EmoteEvent[]>([]);
   useEffect(() => {
     const onEmote = (event: EmoteEvent) => setLive((list) => [...list, event].slice(-LIVE_MAX));
@@ -24,8 +24,8 @@ export function EmoteLayer() {
           data-testid="emote-float"
           style={
             {
-              '--x': `${10 + ((e.id * 37) % 80)}%`,
-              '--sway': `${((e.id * 53) % 7) - 3}rem`,
+              '--x': `${6 + ((e.id * 37) % 58)}%`,
+              '--sway': `${(((e.id * 53) % 7) - 3) * 0.4}rem`,
               '--tilt': `${((e.id * 29) % 31) - 15}deg`,
             } as CSSProperties
           }
@@ -40,7 +40,7 @@ export function EmoteLayer() {
 }
 
 /** One tap sends a reaction to the whole room. */
-export function EmoteBar() {
+function EmoteBar() {
   return (
     <div className="emote-bar" role="group" aria-label="Reactions">
       {EMOTES.map((emote, i) => (
@@ -55,5 +55,15 @@ export function EmoteBar() {
         </button>
       ))}
     </div>
+  );
+}
+
+/** The reactions panel: buttons plus the stream of floating emotes, kept clear of the drawing. */
+export function Reactions() {
+  return (
+    <aside className="reactions" aria-label="Reactions panel">
+      <EmoteLayer />
+      <EmoteBar />
+    </aside>
   );
 }

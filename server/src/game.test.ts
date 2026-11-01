@@ -109,6 +109,19 @@ describe('word choices', () => {
     }
   });
 
+  it('offers 2 to 5 words, easiest first and hardest last, without repeats', () => {
+    for (const count of [2, 3, 4, 5]) {
+      for (let i = 0; i < 30; i++) {
+        const picks = wordChoices(pools(), count);
+        expect(picks).toHaveLength(count);
+        expect(new Set(picks.map((p) => p.word)).size).toBe(count);
+        expect(picks[0]!.tier).toBe(0);
+        expect(picks.at(-1)!.tier).toBe(2);
+        expect(picks.map((p) => p.tier)).toEqual([...picks.map((p) => p.tier)].sort());
+      }
+    }
+  });
+
   it('skips words already used', () => {
     const used = new Set(
       WORD_TIERS.flat().filter((w) => w !== 'cat' && w !== 'tiger' && w !== 'yacht'),

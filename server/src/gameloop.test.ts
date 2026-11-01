@@ -50,11 +50,19 @@ describe('game loop', () => {
     return word;
   };
 
+  it('offers as many words as the host asked for', () => {
+    lobby('Ada', 'Bo');
+    rooms.updateSettings('s-Ada', { wordChoices: 5 });
+    rooms.start('s-Ada');
+    expect(secrets['s-Ada']!.choices).toHaveLength(5);
+    expect(secrets['s-Ada']!.tiers).toHaveLength(5);
+  });
+
   it('offers the drawer words in private and starts the clock once one is picked', () => {
     lobby('Ada', 'Bo');
     rooms.start('s-Ada');
     expect(state.phase).toBe('choosing');
-    expect(secrets['s-Ada']!.choices).toHaveLength(TURN_TIMING.wordChoices);
+    expect(secrets['s-Ada']!.choices).toHaveLength(3);
     expect(secrets['s-Bo']).toEqual({ choices: null, tiers: null, word: null });
     expect(state.hint).toBeNull();
     expect(rooms.chooseWord('s-Bo', 0)).toEqual({ ok: false, error: 'wrong-phase' });

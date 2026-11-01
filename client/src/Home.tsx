@@ -10,6 +10,7 @@ import {
   type Profile,
 } from '@inkling/shared';
 import { Avatar } from './Avatar';
+import { applyTheme, currentTheme, saveTheme, type Theme } from './theme';
 import { ERROR_TEXT, type ClientError } from './useRoom';
 
 interface HomeProps {
@@ -39,6 +40,7 @@ export function Home({
   onLeaderboard,
 }: HomeProps) {
   const [typedCode, setTypedCode] = useState('');
+  const [theme, setTheme] = useState<Theme>(currentTheme);
   const nameOk = profile.name.trim().length > 0;
   const canAct = nameOk && connected && !busy;
 
@@ -48,6 +50,13 @@ export function Home({
     if (inviteCode) onJoin(inviteCode);
     else if (isValidCode(normalizeCode(typedCode))) onJoin(normalizeCode(typedCode));
     else onCreate();
+  };
+
+  const toggleTheme = () => {
+    const next: Theme = theme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    applyTheme(next);
+    saveTheme(next);
   };
 
   const cycleFace = (dir: 1 | -1) =>
@@ -61,6 +70,17 @@ export function Home({
 
   return (
     <main className="shell">
+      <button
+        type="button"
+        className="theme-toggle"
+        role="switch"
+        aria-checked={theme === 'dark'}
+        aria-label="Dark mode"
+        onClick={toggleTheme}
+      >
+        <span aria-hidden="true">{theme === 'dark' ? '☀️' : '🌙'}</span>
+        {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+      </button>
       <header className="brand">
         <img src="/logo.svg" alt="" />
         <div>

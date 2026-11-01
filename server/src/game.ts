@@ -144,7 +144,8 @@ export function wordChoices(pools: WordPools, count: number): WordChoice[] {
   const custom = fresh(pools.custom);
   const picks: WordChoice[] = [];
   for (let slot = 0; slot < count; slot++) {
-    const tier = Math.min(slot, pools.tiers.length - 1);
+    // Spread the slots from easiest to hardest tier, whatever the count.
+    const tier = count > 1 ? Math.round((slot * (pools.tiers.length - 1)) / (count - 1)) : 0;
     const taken = (w: string) => picks.some((p) => p.word === w);
     if (custom.length > 0 && randomInt(2) === 0) {
       const word = custom.splice(randomInt(custom.length), 1)[0]!;

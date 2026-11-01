@@ -71,6 +71,15 @@ describe('RoomManager', () => {
     expect(last.settings.rounds).toBe(SETTINGS_LIMITS.rounds.max);
     expect(last.settings.drawTimeSec).toBe(SETTINGS_LIMITS.drawTimeSec.min);
     expect(last.settings.maxPlayers).toBe(2); // cannot drop below seated players
+    rooms.updateSettings('a', { wordChoices: 99 });
+    expect(changes.at(-1)!.settings.wordChoices).toBe(5);
+    rooms.updateSettings('a', { wordChoices: 0 });
+    expect(changes.at(-1)!.settings.wordChoices).toBe(2);
+  });
+
+  it('offers three word choices unless the host says otherwise', () => {
+    const { room } = create('a', 'Ada');
+    expect(room.settings.wordChoices).toBe(3);
   });
 
   it('lets only the host kick, never themselves, and bars the kicked name', () => {

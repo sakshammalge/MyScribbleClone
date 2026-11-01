@@ -10,13 +10,14 @@ export const SETTINGS_LIMITS = {
   rounds: { min: 2, max: 10, default: 3 },
   drawTimeSec: { min: 30, max: 180, default: 80 },
   maxPlayers: { min: 2, max: 12, default: 8 },
+  /** How many words the drawer picks from each turn. */
+  wordChoices: { min: 2, max: 5, default: 3 },
 } as const;
 
 /** Fixed pacing of a turn; the draw time itself is a room setting. */
 export const TURN_TIMING = {
   chooseSec: 15,
   revealSec: 6,
-  wordChoices: 3,
   /** Share of the draw time already gone when each hint appears. */
   hintAt: [0.4, 0.7],
 } as const;
@@ -222,6 +223,7 @@ export function defaultSettings(): RoomSettings {
     rounds: SETTINGS_LIMITS.rounds.default,
     drawTimeSec: SETTINGS_LIMITS.drawTimeSec.default,
     maxPlayers: SETTINGS_LIMITS.maxPlayers.default,
+    wordChoices: SETTINGS_LIMITS.wordChoices.default,
   };
 }
 

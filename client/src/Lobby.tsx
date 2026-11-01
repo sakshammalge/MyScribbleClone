@@ -27,6 +27,7 @@ const SETTING_LABELS: Record<keyof RoomSettings, { label: string; unit: string }
   rounds: { label: 'Rounds', unit: '' },
   drawTimeSec: { label: 'Draw time', unit: 's' },
   maxPlayers: { label: 'Max players', unit: '' },
+  wordChoices: { label: 'Word choices', unit: '' },
 };
 
 export function Lobby({
@@ -73,7 +74,12 @@ export function Lobby({
       <section className="ticket" aria-label="Invite">
         <div className="ticket-main">
           <p className="eyebrow">Room code</p>
-          <div className="code-tiles" aria-label={`Room code ${room.code}`} data-testid="room-code">
+          <div
+            className="code-tiles"
+            role="img"
+            aria-label={`Room code ${room.code}`}
+            data-testid="room-code"
+          >
             {[...room.code].map((ch, i) => (
               <span key={i} className="tile">
                 {ch}
@@ -86,6 +92,7 @@ export function Lobby({
           <input
             className="link-box"
             readOnly
+            aria-readonly="true"
             value={link}
             aria-label="Invite link"
             onFocus={(e) => e.target.select()}
