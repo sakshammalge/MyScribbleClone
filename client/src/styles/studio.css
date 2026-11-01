@@ -1,8 +1,8 @@
 /*
  * The studio (game screen). It is exactly one viewport tall and never scrolls; only the player
  * list and the chat log scroll inside their own boxes. Layouts, by viewport:
- *   a) wide (>= 1200px, tall enough): players | sheet | chat
- *   b) medium (900-1199px): sheet | sidebar (players grid over chat)
+ *   a) wide AND flat (>= 1200px, aspect >= 1.9): players | sheet | chat
+ *   b) everything else from 900px up: sheet | sidebar (players over chat)
  *   c) narrow (< 900px): stacked, players as a strip
  *   d) short (< 500px high, phone landscape): sheet | strip over chat
  * The sheet is sized with container units from the space its column leaves it, always 4:3.
@@ -1640,14 +1640,14 @@ body:has(.studio) {
   }
 }
 
-/* ---- b) Medium: sheet on the left, sidebar with a players grid over the chat ---- */
+/* ---- b) Two columns: sheet on the left, sidebar with the players over the chat ---- */
 @media (min-width: 900px) and (min-height: 500px) {
   .studio {
     --pad: 12px;
     --gap: 12px;
     --dock-gap: 8px;
 
-    grid-template-columns: minmax(0, 1fr) 280px;
+    grid-template-columns: minmax(0, 1fr) clamp(280px, 22vw, 340px);
     grid-template-rows: var(--bar-h) auto minmax(0, 1fr);
     grid-template-areas: 'bar bar' 'stage rail' 'stage chat';
   }
@@ -1660,51 +1660,10 @@ body:has(.studio) {
     width: min(100cqw, calc((100cqh - var(--dock-total)) * 4 / 3));
   }
 
+  /* Content height, never more than 45% of the column; the list scrolls beyond that. */
   .rail {
-    max-height: min(300px, 46dvh);
-  }
-
-  .rail ol {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    column-gap: 2px;
-  }
-
-  .rank,
-  .you {
-    display: none;
-  }
-
-  .prow {
-    padding: 0 6px 0 4px;
-    gap: 5px;
-    font-size: 0.85rem;
-  }
-
-  .prow .avatar {
-    width: 24px;
-    height: 24px;
-  }
-
-  .prow[data-me='true'] {
-    box-shadow: inset 3px 0 0 var(--color-accent);
-  }
-
-  .kick {
-    width: 20px;
-    height: 20px;
-  }
-}
-
-/* ---- a) Wide: players | sheet | chat ---- */
-@media (min-width: 1200px) and (min-height: 500px) {
-  .studio {
-    grid-template-columns: clamp(196px, 14vw, 240px) minmax(0, 1fr) clamp(264px, 19vw, 340px);
-    grid-template-rows: var(--bar-h) minmax(0, 1fr);
-    grid-template-areas: 'bar bar bar' 'rail stage chat';
-  }
-
-  .rail {
-    max-height: 100%;
+    align-self: start;
+    max-height: calc((100dvh - var(--bar-h) - var(--pad) - var(--gap)) * 0.45);
   }
 
   .rail ol {
@@ -1721,7 +1680,7 @@ body:has(.studio) {
 
   .prow {
     padding: 0 6px 0 4px;
-    gap: 5px;
+    gap: 6px;
     font-size: 0.9rem;
   }
 
@@ -1737,6 +1696,20 @@ body:has(.studio) {
   .kick {
     width: 24px;
     height: 24px;
+  }
+}
+
+/* ---- a) Three columns, only when the window is wide for its height: players | sheet | chat ---- */
+@media (min-width: 1200px) and (min-height: 500px) and (min-aspect-ratio: 19/10) {
+  .studio {
+    grid-template-columns: clamp(196px, 14vw, 240px) minmax(0, 1fr) clamp(264px, 19vw, 340px);
+    grid-template-rows: var(--bar-h) minmax(0, 1fr);
+    grid-template-areas: 'bar bar bar' 'rail stage chat';
+  }
+
+  .rail {
+    align-self: start;
+    max-height: 100%;
   }
 }
 

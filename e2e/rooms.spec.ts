@@ -60,6 +60,7 @@ test('friends join through the invite link and everyone sees the roster live', a
   await expect(bo.page.getByRole('region', { name: 'Game settings' })).toContainText('7');
 
   // Host leaves: the role moves to the next player.
+  await host.page.getByRole('button', { name: 'Menu' }).click();
   await host.page.getByRole('button', { name: 'Leave room' }).click();
   await expect(host.page.getByRole('button', { name: 'Create a private room' })).toBeVisible();
   await expect(roster(bo.page)).toHaveCount(2);

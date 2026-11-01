@@ -9,6 +9,7 @@ import {
 } from '@inkling/shared';
 import { Avatar } from './Avatar';
 import { Chat } from './Chat';
+import { GameMenu } from './GameMenu';
 import { inviteUrl } from './route';
 
 interface LobbyProps {
@@ -44,9 +45,17 @@ export function Lobby({
   const [copied, setCopied] = useState(false);
   const [draft, setDraft] = useState('');
   const [only, setOnly] = useState(false);
+
   const me = room.players.find((p) => p.id === myId);
   const isHost = me?.isHost ?? false;
+  // The host's words box starts folded on short desktop windows, where there is no room for it.
+  const [wordsOpen, setWordsOpen] = useState(
+    () => !(isHost && window.matchMedia('(min-width: 1024px) and (max-height: 740px)').matches),
+  );
   const link = inviteUrl(room.code);
+  const hostName = room.players.find((p) => p.isHost)?.name ?? 'the host';
+  const { maxPlayers } = room.settings;
+  const openSeats = Math.max(0, maxPlayers - room.players.length);
 
   const copy = async () => {
     try {
@@ -63,170 +72,236 @@ export function Lobby({
   };
 
   return (
-    <main className="shell lobby">
-      <header className="lobby-head">
-        <h1>{APP_NAME}</h1>
-        <button type="button" className="link" onClick={onLeave}>
-          Leave room
-        </button>
+    <main className="lobby">
+      <header className="studio-bar lobby-bar">
+        <span className="logo">
+          <img src="/logo.svg" alt="" width="24" height="24" />
+          <h1>{APP_NAME}</h1>
+        </span>
+        <span className="chip" aria-label={`Room ${room.code}`}>
+          {room.code}
+        </span>
+        <span className="lobby-bar-fill" />
+        <GameMenu isHost={isHost} onLeave={onLeave} />
       </header>
 
-      <section className="ticket" aria-label="Invite">
-        <div className="ticket-main">
-          <p className="eyebrow">Room code</p>
-          <div
-            className="code-tiles"
-            role="img"
-            aria-label={`Room code ${room.code}`}
-            data-testid="room-code"
-          >
-            {[...room.code].map((ch, i) => (
-              <span key={i} className="tile">
-                {ch}
+      <div className="lobby-body">
+        <section className="invite" aria-label="Invite">
+          <div className="invite-code">
+            <p className="eyebrow">Room code</p>
+            <div
+              className="code-tiles"
+              role="img"
+              aria-label={`Room code ${room.code}`}
+              data-testid="room-code"
+            >
+              {[...room.code].map((ch, i) => (
+                <span key={i} className="tile">
+                  {ch}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div className="invite-link">
+            <p className="eyebrow">Invite link</p>
+            <div className="invite-row">
+              <input
+                className="link-box"
+                readOnly
+                aria-readonly="true"
+                value={link}
+                aria-label="Invite link"
+                onFocus={(e) => e.target.select()}
+              />
+              <button type="button" className="btn" onClick={copy}>
+                {copied ? 'Copied!' : 'Copy link'}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <div className="main-col">
+          <section className="panel players" aria-label="Players">
+            <div className="panel-title">
+              <h2>Players</h2>
+              <span className="count">
+                {room.players.length} / {maxPlayers}
               </span>
-            ))}
+            </div>
+            <div className="seats">
+              <ul className="seat-list">
+                {room.players.map((p) => (
+                  <li
+                    key={p.id}
+                    className="seat"
+                    data-testid="seat"
+                    data-connected={p.connected}
+                    data-me={p.id === myId}
+                  >
+                    <Avatar {...p.avatar} size={36} />
+                    <span className="seat-text">
+                      <span className="player-name">{p.name}</span>
+                      <span className="seat-tags">
+                        {p.id === myId && <span className="badge">you</span>}
+                        {p.isHost && <span className="badge host">host</span>}
+                        {!p.connected && <span className="badge away">reconnecting…</span>}
+                      </span>
+                    </span>
+                    {isHost && p.id !== myId && (
+                      <button
+                        type="button"
+                        className="kick"
+                        aria-label={`Remove ${p.name}`}
+                        title="Remove"
+                        onClick={() => onKick(p.id)}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {Array.from({ length: openSeats }, (_, i) => (
+                <div key={i} className="seat open" data-testid="seat" aria-hidden="true">
+                  <span className="seat-plus">+</span>
+                  <span className="seat-text">Open seat</span>
+                </div>
+              ))}
+              {openSeats > 0 && (
+                <p className="seats-more" aria-hidden="true">
+                  +{openSeats} open {openSeats === 1 ? 'seat' : 'seats'}
+                </p>
+              )}
+            </div>
+          </section>
+
+          <div className="panel chat-panel">
+            <div className="panel-title">
+              <h2>Chat</h2>
+            </div>
+            <Chat messages={chat} onSend={onChat} placeholder="Say hello…" />
           </div>
         </div>
-        <div className="ticket-stub">
-          <p className="eyebrow">Invite link</p>
-          <input
-            className="link-box"
-            readOnly
-            aria-readonly="true"
-            value={link}
-            aria-label="Invite link"
-            onFocus={(e) => e.target.select()}
-          />
-          <button type="button" className="btn" onClick={copy}>
-            {copied ? 'Copied!' : 'Copy link'}
-          </button>
-        </div>
-      </section>
 
-      <div className="lobby-grid">
-        <section className="card" aria-label="Players">
-          <h2>
-            Players{' '}
-            <span className="count">
-              {room.players.length}/{room.settings.maxPlayers}
-            </span>
-          </h2>
-          <ul className="roster">
-            {room.players.map((p) => (
-              <li key={p.id} className="player" data-connected={p.connected}>
-                <Avatar {...p.avatar} size={32} />
-                <span className="player-name">{p.name}</span>
-                {p.id === myId && <span className="badge">you</span>}
-                {p.isHost && <span className="badge host">host</span>}
-                {!p.connected && <span className="badge away">reconnecting…</span>}
-                {isHost && p.id !== myId && (
-                  <button
-                    type="button"
-                    className="kick"
-                    aria-label={`Remove ${p.name}`}
-                    title="Remove"
-                    onClick={() => onKick(p.id)}
-                  >
-                    ✕
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <aside className="side">
+          <section className="panel settings" aria-label="Game settings">
+            <div className="panel-title">
+              <h2>Game settings</h2>
+            </div>
+            {(Object.keys(SETTINGS_LIMITS) as (keyof RoomSettings)[]).map((key) => {
+              const { min, max } = SETTINGS_LIMITS[key];
+              const { label, unit } = SETTING_LABELS[key];
+              const floor = key === 'maxPlayers' ? Math.max(min, room.players.length) : min;
+              return (
+                <label key={key} className="setting">
+                  <span>
+                    {label}
+                    <output>
+                      {room.settings[key]}
+                      {unit}
+                    </output>
+                  </span>
+                  <input
+                    type="range"
+                    aria-label={label}
+                    min={floor}
+                    max={max}
+                    step={key === 'drawTimeSec' ? 10 : 1}
+                    value={room.settings[key]}
+                    disabled={!isHost}
+                    onChange={(e) => onSettings({ [key]: Number(e.target.value) })}
+                  />
+                </label>
+              );
+            })}
+            {!isHost && <p className="muted">Only the host can change these.</p>}
+          </section>
 
-        <section className="card" aria-label="Game settings">
-          <h2>Game settings</h2>
-          {(Object.keys(SETTINGS_LIMITS) as (keyof RoomSettings)[]).map((key) => {
-            const { min, max } = SETTINGS_LIMITS[key];
-            const { label, unit } = SETTING_LABELS[key];
-            const floor = key === 'maxPlayers' ? Math.max(min, room.players.length) : min;
-            return (
-              <label key={key} className="setting">
-                <span>
-                  {label}
-                  <output>
-                    {room.settings[key]}
-                    {unit}
-                  </output>
-                </span>
-                <input
-                  type="range"
-                  aria-label={label}
-                  min={floor}
-                  max={max}
-                  step={key === 'drawTimeSec' ? 10 : 1}
-                  value={room.settings[key]}
-                  disabled={!isHost}
-                  onChange={(e) => onSettings({ [key]: Number(e.target.value) })}
+          <section className="panel words" aria-label="Custom words" data-open={wordsOpen}>
+            <button
+              type="button"
+              className="panel-title fold"
+              aria-expanded={wordsOpen}
+              aria-controls="words-body"
+              onClick={() => setWordsOpen((v) => !v)}
+            >
+              <h2>Your own words</h2>
+              <span className="count" data-testid="custom-count">
+                {room.customWordCount}
+              </span>
+              <svg className="chev" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+                <path
+                  d="M6 9l6 6 6-6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
-              </label>
-            );
-          })}
-          {!isHost && <p className="muted">Only the host can change these.</p>}
-          <button
-            type="button"
-            className="btn"
-            disabled={!isHost || room.players.length < 2}
-            onClick={onStart}
-          >
-            Start game
-          </button>
-          <p className="muted">
-            {room.players.length < 2
-              ? 'Waiting for at least one more player…'
-              : isHost
-                ? 'Everyone is in. Start when you are ready.'
-                : 'Waiting for the host to start.'}
-          </p>
-        </section>
+              </svg>
+            </button>
+            <div className="words-body" id="words-body" hidden={!wordsOpen}>
+              {isHost ? (
+                <>
+                  <label className="field">
+                    One per line, or separated by commas
+                    <textarea
+                      aria-label="Custom words"
+                      rows={3}
+                      value={draft}
+                      maxLength={CUSTOM_WORDS.maxWords * (CUSTOM_WORDS.maxLength + 1)}
+                      placeholder={'inside joke\nour office dog\nthat one meeting'}
+                      onChange={(e) => setDraft(e.target.value)}
+                    />
+                  </label>
+                  <div className="words-actions">
+                    <label className="check">
+                      <input
+                        type="checkbox"
+                        checked={only}
+                        onChange={(e) => setOnly(e.target.checked)}
+                      />
+                      Use only my words
+                    </label>
+                    <button type="button" className="btn secondary" onClick={saveWords}>
+                      Save words
+                    </button>
+                  </div>
+                  <p className="muted">
+                    Mixed in with the built-in list unless you tick the box. Players never see them
+                    until they come up.
+                  </p>
+                </>
+              ) : (
+                <p className="muted">
+                  {room.customWordCount === 0
+                    ? 'The host has not added any words of their own.'
+                    : room.customWordsOnly
+                      ? `The game will use only the host’s ${room.customWordCount} words.`
+                      : `${room.customWordCount} of the host’s words are mixed in.`}
+                </p>
+              )}
+            </div>
+          </section>
 
-        <section className="card" aria-label="Custom words">
-          <h2>
-            Your own words{' '}
-            <span className="count" data-testid="custom-count">
-              {room.customWordCount}
-            </span>
-          </h2>
-          {isHost ? (
-            <>
-              <label className="field">
-                One per line, or separated by commas
-                <textarea
-                  aria-label="Custom words"
-                  rows={4}
-                  value={draft}
-                  maxLength={CUSTOM_WORDS.maxWords * (CUSTOM_WORDS.maxLength + 1)}
-                  placeholder={'inside joke\nour office dog\nthat one meeting'}
-                  onChange={(e) => setDraft(e.target.value)}
-                />
-              </label>
-              <label className="check">
-                <input type="checkbox" checked={only} onChange={(e) => setOnly(e.target.checked)} />
-                Use only my words
-              </label>
-              <button type="button" className="btn secondary" onClick={saveWords}>
-                Save words
-              </button>
-              <p className="muted">
-                Mixed in with the built-in list unless you tick the box. Players never see them
-                until they come up.
-              </p>
-            </>
-          ) : (
+          <div className="start">
+            <button
+              type="button"
+              className="btn"
+              disabled={!isHost || room.players.length < 2}
+              onClick={onStart}
+            >
+              Start game
+            </button>
             <p className="muted">
-              {room.customWordCount === 0
-                ? 'The host has not added any words of their own.'
-                : room.customWordsOnly
-                  ? `The game will use only the host’s ${room.customWordCount} words.`
-                  : `${room.customWordCount} of the host’s words are mixed in.`}
+              {room.players.length < 2
+                ? 'Waiting for at least one more player…'
+                : isHost
+                  ? 'Everyone is in. Start when you are ready.'
+                  : `Waiting for ${hostName} to start…`}
             </p>
-          )}
-        </section>
-
-        <div className="lobby-chat">
-          <Chat messages={chat} onSend={onChat} placeholder="Say hello…" />
-        </div>
+          </div>
+        </aside>
       </div>
     </main>
   );

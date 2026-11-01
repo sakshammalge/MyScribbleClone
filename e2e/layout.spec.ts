@@ -24,9 +24,11 @@ interface Viewport {
 
 const VIEWPORTS: Viewport[] = [
   { width: 1280, height: 720, minCanvas: 730 },
+  { width: 1320, height: 820, minCanvas: 880 },
   { width: 1366, height: 768, minCanvas: 800 },
-  { width: 1440, height: 900, minCanvas: 870 },
-  { width: 1512, height: 982, minCanvas: 910 },
+  { width: 1440, height: 900, minCanvas: 980 },
+  { width: 1512, height: 982, minCanvas: 1090 },
+  { width: 1728, height: 1000, minCanvas: 1110 },
   { width: 1920, height: 1080, minCanvas: 1200 },
   { width: 1024, height: 768, minCanvas: 670 },
   { width: 768, height: 1024, minCanvas: 700 },
@@ -177,6 +179,18 @@ async function expectFits(page: Page, vp: Viewport, role: 'drawer' | 'guesser') 
     const bar = await box(page.getByRole('toolbar', { name: 'Drawing tools' }));
     expect(bar.width, `${label} toolbar is as wide as the sheet`).toBeLessThanOrEqual(c.width + 6);
     expect(bar.height, `${label} toolbar height`).toBeLessThanOrEqual(56);
+  }
+
+  // Sheet height: on desktop layouts nothing may be left empty under the sheet and its toolbar (or
+  // note) unless the window is too narrow to grow the sheet any further.
+  if (vp.width >= 900 && vp.height >= 500) {
+    const stage = await box(page.locator('.stage'));
+    const board = await box(page.locator('.board'));
+    const gap = vp.height - (board.y + board.height);
+    expect(
+      gap <= 24 || c.width >= stage.width - 8,
+      `${label}: ${Math.round(gap)}px empty under the sheet`,
+    ).toBe(true);
   }
   return { width: Math.round(c.width), height: Math.round(c.height) };
 }
